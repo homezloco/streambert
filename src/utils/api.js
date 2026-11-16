@@ -174,8 +174,12 @@ export const tmdbFetch = async (path, apiKey) => {
 // https://vidrift.net/docs
 // https://vidnest.fun
 // https://vidrock.net
+// https://111movies.com
+// https://cinemaos.tech
 // https://devideosrc.co/docs
 // https://frembed.bar/api-docs
+// https://vixsrc.to
+// https://www.nontongo.win
 // https://on.kinohub.vip/
 
 // ── Player Sources ────────────────────────────────────────────────────────────
@@ -330,6 +334,32 @@ export const PLAYER_SOURCES = [
       `https://vidrock.net/tv/${id}/${season}/${ep}`,
   },
   {
+    id: "111movies",
+    label: "111Movies",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://111movies.com/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://111movies.com/tv/${id}/${season}/${ep}`,
+  },
+  {
+    id: "cinemaos",
+    label: "CinemaOS",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://cinemaos.tech/player/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://cinemaos.tech/player/${id}/${season}/${ep}`,
+  },
+  {
     id: "devideosrc",
     label: "DeVideoSrc",
     tag: null,
@@ -365,6 +395,31 @@ export const PLAYER_SOURCES = [
       `https://frembed.uno/embed/serie/${id}?sa=${season}&epi=${ep}`,
   },
   {
+    id: "vixsrc",
+    label: "VixSrc",
+    tag: null,
+    note: "🇮🇹",
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://vixsrc.to/movie/${id}`,
+    tvUrl: (id, season, ep) => `https://vixsrc.to/tv/${id}/${season}/${ep}`,
+  },
+  {
+    id: "nontongo",
+    label: "NontonGo",
+    tag: null,
+    note: "🇮🇩", // Indonesian-focused but strong Asian-content coverage
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://www.nontongo.win/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://www.nontongo.win/embed/tv/${id}/${season}/${ep}`,
+  },
+  {
     id: "kinohub",
     label: "KinoHub",
     tag: null,
@@ -397,8 +452,12 @@ export const NEEDS_INTERCEPT = [
   "vidlink",
   "vidjoy",
   "vidrock",
+  "111movies",
+  "cinemaos",
   "devideosrc",
   "frembed",
+  "vixsrc",
+  "nontongo",
   "kinohub",
 ];
 
