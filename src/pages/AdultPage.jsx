@@ -431,12 +431,7 @@ export default function AdultPage() {
           </>
         )}
         {mode === "sites" && (
-          <div
-            className="browse-tabs site-tabs"
-            onWheel={(e) => {
-              e.currentTarget.scrollLeft += e.deltaY;
-            }}
-          >
+          <div className="browse-tabs site-tabs">
             {SITES.map((s) => (
               <button
                 key={s.id}
@@ -449,12 +444,7 @@ export default function AdultPage() {
           </div>
         )}
         {mode === "images" && (
-          <div
-            className="browse-tabs site-tabs"
-            onWheel={(e) => {
-              e.currentTarget.scrollLeft += e.deltaY;
-            }}
-          >
+          <div className="browse-tabs site-tabs">
             {IMAGE_SITES.map((s) => (
               <button
                 key={s.id}
