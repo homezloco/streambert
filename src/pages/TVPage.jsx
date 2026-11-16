@@ -472,6 +472,13 @@ export default function TVPage({
   // Refs mirror the above so the resolve-effect can guard without stale closures
   const resolvingUrlRef = useRef(false);
   const resolvedPlayerUrlRef = useRef(null);
+  // Native player: replay captured streams through the app's own hls.js
+  // player instead of the embed. Preference persists across plays.
+  const [nativeMode, setNativeMode] = useState(
+    () => storage.get("nativePlayer") === true,
+  );
+  const [nativePlayerUrl, setNativePlayerUrl] = useState(null);
+  const nativeSwapRef = useRef(false);
   const [anilistData, setAnilistData] = useState(null);
   const [anilistSeasons, setAnilistSeasons] = useState(null); // [{seasonNum, title, episodes, year}]
   const [anilistLoading, setAnilistLoading] = useState(false);
@@ -703,6 +710,8 @@ export default function TVPage({
     setM3u8Url(null);
     setInterceptedSubs([]);
     setShowSourceMenu(false);
+    setNativePlayerUrl(null);
+    nativeSwapRef.current = false;
     resolvedPlayerUrlRef.current = null;
     setResolvedPlayerUrl(null);
     resolvingUrlRef.current = false;
@@ -781,6 +790,8 @@ export default function TVPage({
       if (cached && cached !== playerSource) {
         setM3u8Url(null);
         setInterceptedSubs([]);
+        setNativePlayerUrl(null);
+        nativeSwapRef.current = false;
         resolvedPlayerUrlRef.current = null;
         setResolvedPlayerUrl(null);
         resolvingUrlRef.current = false;
@@ -841,6 +852,8 @@ export default function TVPage({
             setFailoverSource(epKey, next);
             setM3u8Url(null);
             setInterceptedSubs([]);
+            setNativePlayerUrl(null);
+            nativeSwapRef.current = false;
             resolvedPlayerUrlRef.current = null;
             setResolvedPlayerUrl(null);
             setResolveError(null);
@@ -871,6 +884,44 @@ export default function TVPage({
     });
     return () => window.electron.offM3u8Found(handler);
   }, []);
+
+  // Native player: on the first real stream URL, replay it through the app's
+  // own hls.js player and swap the webview to it (killing the embed). Runs at
+  // most once per play; if it fails the embed simply keeps playing.
+  useEffect(() => {
+    if (!nativeMode || !m3u8Url || isAsync) return;
+    if (nativeSwapRef.current) return;
+    nativeSwapRef.current = true;
+    const sub =
+      interceptedSubs.find((s) => /^en/i.test(s.lang || "")) ||
+      interceptedSubs[0] ||
+      null;
+    // Same key shape as currentProgressKey (declared later in the component)
+    const pk = selectedEp
+      ? `tv_${item.id}_s${selectedSeason}e${selectedEp.episode_number}`
+      : null;
+    const startTime = (pk && storage.get("dlTime_" + pk)) || 0;
+    window.electron
+      ?.nativePlay({ url: m3u8Url, subtitle: sub?.url || null, startTime })
+      .then((r) => {
+        if (r?.ok && r.playerUrl) {
+          setNativePlayerUrl(r.playerUrl);
+        } else {
+          nativeSwapRef.current = false; // stay on the embed
+        }
+      })
+      .catch(() => {
+        nativeSwapRef.current = false;
+      });
+  }, [
+    nativeMode,
+    m3u8Url,
+    isAsync,
+    interceptedSubs,
+    selectedEp,
+    selectedSeason,
+    item.id,
+  ]);
 
   // Close source dropdown on scroll or click-outside
   useEffect(() => {
@@ -1634,6 +1685,8 @@ export default function TVPage({
     (ep) => {
       setM3u8Url(null);
       setInterceptedSubs([]);
+      setNativePlayerUrl(null);
+      nativeSwapRef.current = false;
       resolvedPlayerUrlRef.current = null;
       setResolvedPlayerUrl(null);
       resolvingUrlRef.current = false;
@@ -2225,7 +2278,7 @@ export default function TVPage({
                       ? "about:blank"
                       : isAsync
                         ? resolvedPlayerUrl || "about:blank"
-                        : playerDirectUrl || "about:blank"
+                        : nativePlayerUrl || playerDirectUrl || "about:blank"
                   }
                   partition="persist:player"
                   allowpopups="false"
@@ -2263,6 +2316,29 @@ export default function TVPage({
                     {PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
                       "Source"}
                   </button>
+                  {/* Native player toggle: replay the captured stream in the
+                      app's own hls.js player instead of the embed */}
+                  {!isAsync && (
+                    <button
+                      className="player-overlay-btn"
+                      onClick={() => {
+                        const next = !nativeMode;
+                        setNativeMode(next);
+                        storage.set("nativePlayer", next);
+                        if (!next && nativePlayerUrl) {
+                          // back to the embed
+                          setNativePlayerUrl(null);
+                          nativeSwapRef.current = false;
+                        }
+                      }}
+                      title="Play through the app's own player instead of the embed site"
+                      style={
+                        nativeMode ? { color: "var(--red)" } : undefined
+                      }
+                    >
+                      Native
+                    </button>
+                  )}
                   {/* Sub/Dub toggle: HiAnime, and anime-capable sources (Vidnest) on anime titles */}
                   {(isAsync ||
                     (isAnime && sourceSupportsAnime(playerSource))) && (
@@ -2274,6 +2350,8 @@ export default function TVPage({
                         storage.set(STORAGE_KEYS.HIANIME_DUB_MODE, next);
                         setM3u8Url(null);
                         setInterceptedSubs([]);
+                        setNativePlayerUrl(null);
+                        nativeSwapRef.current = false;
                         resolvedPlayerUrlRef.current = null;
                         setResolvedPlayerUrl(null);
                         resolvingUrlRef.current = false;
@@ -2309,7 +2387,9 @@ export default function TVPage({
                         window.electron?.closePipWindow?.();
                         return;
                       }
-                      const url = isAsync ? resolvedPlayerUrl : playerDirectUrl;
+                      const url = isAsync
+                        ? resolvedPlayerUrl
+                        : nativePlayerUrl || playerDirectUrl;
                       if (!url) return;
                       pipUrlRef.current = url;
                       window.electron?.openPipWindow?.(
@@ -2359,6 +2439,8 @@ export default function TVPage({
                             storage.set(STORAGE_KEYS.PLAYER_SOURCE, src.id);
                             setM3u8Url(null);
                             setInterceptedSubs([]);
+                            setNativePlayerUrl(null);
+                            nativeSwapRef.current = false;
                             resolvedPlayerUrlRef.current = null;
                             setResolvedPlayerUrl(null);
                             resolvingUrlRef.current = false;

@@ -435,9 +435,11 @@ function setupSession(playerSession, trailerSession) {
           return;
         }
       } catch {}
-      // Pass through + notify renderer
+      // Pass through + notify renderer.
+      // Loopback URLs are the local player proxy's own requests — reporting
+      // them back as "found" streams would feed the proxy into itself.
       const mw = getMainWindow();
-      if (mw && !mw.isDestroyed()) {
+      if (mw && !mw.isDestroyed() && !url.startsWith("http://127.0.0.1")) {
         if (url.includes(".m3u8")) {
           mw.webContents.send("m3u8-found", url);
         } else if (url.includes(".vtt")) {

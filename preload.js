@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld("electron", {
   // anime episode resolver (main-process HTTP, bypasses CORS/bot-check)
   resolveHiAnime: (args) => ipcRenderer.invoke("resolve-hianime", args),
   setPlayerVideo: (args) => ipcRenderer.invoke("set-player-video", args),
+  // Replay a captured m3u8 through the local hls.js player (native mode)
+  nativePlay: (args) => ipcRenderer.invoke("native-play", args),
   // progress of the HiAnime lookup (stage: "search" | "episodes" | "stream");
   // returns an unsubscribe function
   onHiAnimeProgress: (cb) => {

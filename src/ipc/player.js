@@ -1,6 +1,7 @@
 // ── IPC: Player launch, window controls, auto-updater ─────────────────────────
 
 const { ipcMain, shell, app } = require("electron");
+const hianime = require("./hianime");
 const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -219,6 +220,32 @@ function register(getMainWindow, { writeSecretMigration }) {
         }
       }
       shell.openPath(safeFilePath);
+    },
+  );
+
+  // ── Native player: replay a captured m3u8 through the local hls.js player ──
+  // The embed site only runs long enough to reveal the stream URL; playback
+  // itself then happens on our own localhost player page (no ads, no fake
+  // buttons). Referer/Origin/UA captured by the session hook are replayed so
+  // CDN requests look identical to the embed's own.
+  ipcMain.handle(
+    "native-play",
+    async (_, { url, subtitle, startTime } = {}) => {
+      if (!isHttpUrl(url)) return { ok: false, error: "Invalid stream URL" };
+      const meta = streamMeta.get(url) || {};
+      try {
+        const r = await hianime.setPlayerVideo({
+          url,
+          referer: meta.referer || null,
+          origin: meta.origin || null,
+          userAgent: meta.userAgent || null,
+          subtitle: subtitle || null,
+          startTime: Number.isFinite(+startTime) ? +startTime : 0,
+        });
+        return { ok: true, playerUrl: r.playerUrl };
+      } catch (e) {
+        return { ok: false, error: e?.message || "Native player failed" };
+      }
     },
   );
 

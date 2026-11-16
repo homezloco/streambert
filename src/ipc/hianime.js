@@ -508,6 +508,8 @@ let _playerServer = null;
 let _serverToken = crypto.randomBytes(24).toString("hex");
 let _currentVideoUrl = null;
 let _currentVideoReferer = BASE_URL + "/";
+let _currentVideoOrigin = null;
+let _currentVideoUA = null;
 let _currentVideoSubtitle = null;
 let _currentVideoStartTime = 0;
 
@@ -591,11 +593,12 @@ async function proxyRequest(target, req, res, hops = 0) {
   }
   const lib = targetUrl.protocol === "https:" ? https : http;
   const headers = {
-    "User-Agent": USER_AGENT,
+    "User-Agent": _currentVideoUA || USER_AGENT,
     Referer: _currentVideoReferer,
     Accept: "*/*",
     "Accept-Encoding": "identity",
   };
+  if (_currentVideoOrigin) headers.Origin = _currentVideoOrigin;
   if (req.headers["range"]) headers["Range"] = req.headers["range"];
 
   const proxyReq = lib.request(
@@ -860,24 +863,35 @@ const asPosInt = (v, fallback) => {
 
 // ── IPC registration ──────────────────────────────────────────────────────────
 
+// Register a video URL with the local player server. Works for any public
+// http(s) stream — HiAnime passes its own referer, other callers (native
+// player mode) pass the headers captured by the session hook.
+// Without an explicit referer the stream's own origin is used.
+async function setPlayerVideo(args = {}) {
+  const url = asString(args.url, 4096);
+  // only public http(s) targets may ever reach the local proxy
+  await assertPublicUrl(url);
+  const referer = asString(args.referer, 2048) || new URL(url).origin + "/";
+  const origin = asString(args.origin, 512) || null;
+  const userAgent = asString(args.userAgent, 512) || null;
+  const subtitle = asString(args.subtitle, 4096) || null;
+  await assertPublicUrl(referer);
+  if (origin) await assertPublicUrl(origin);
+  if (subtitle) await assertPublicUrl(subtitle);
+  _currentVideoUrl = url;
+  _currentVideoReferer = referer;
+  _currentVideoOrigin = origin;
+  _currentVideoUA = userAgent;
+  _currentVideoSubtitle = subtitle;
+  _currentVideoStartTime = asPosInt(args.startTime, 0);
+  const server = await getPlayerServer();
+  return {
+    playerUrl: `http://127.0.0.1:${server.address().port}/player?t=${_serverToken}`,
+  };
+}
+
 function register() {
-  ipcMain.handle("set-player-video", async (_, args = {}) => {
-    const url = asString(args.url, 4096);
-    const referer = asString(args.referer, 2048) || BASE_URL + "/";
-    const subtitle = asString(args.subtitle, 4096) || null;
-    // only public http(s) targets may ever reach the local proxy
-    await assertPublicUrl(url);
-    await assertPublicUrl(referer);
-    if (subtitle) await assertPublicUrl(subtitle);
-    _currentVideoUrl = url;
-    _currentVideoReferer = referer;
-    _currentVideoSubtitle = subtitle;
-    _currentVideoStartTime = asPosInt(args.startTime, 0);
-    const server = await getPlayerServer();
-    return {
-      playerUrl: `http://127.0.0.1:${server.address().port}/player?t=${_serverToken}`,
-    };
-  });
+  ipcMain.handle("set-player-video", (_, args) => setPlayerVideo(args));
 
   ipcMain.handle("resolve-hianime", async (event, args = {}) => {
     // progress events drive the loading screen in the renderer
@@ -1006,6 +1020,7 @@ function register() {
 
 module.exports = {
   register,
+  setPlayerVideo,
   // exported for tests
   _internal: {
     deobfuscateBlob,
