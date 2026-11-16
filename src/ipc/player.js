@@ -90,7 +90,7 @@ const isHttpUrl = (u) => {
   }
 };
 
-function register(getMainWindow, { writeSecretMigration }) {
+function register(getMainWindow, { writeSecretMigration, openLocalPlayer }) {
   // ── Open file at specific timestamp in mpv / VLC ─────────────────────────
 
   // Extensions considered safe to pass to an external media player.
@@ -223,8 +223,8 @@ function register(getMainWindow, { writeSecretMigration }) {
         if (tryLaunch(vlc, args)) return;
       }
       // No external player installed: use the app's own player page — the
-      // file is served through the token-guarded localhost server and the
-      // page opens in the user's browser.
+      // file is served through the token-guarded localhost server and shown
+      // in a dedicated in-app window (never the system browser).
       try {
         const r = await hianime.setPlayerFile({
           file: safeFilePath,
@@ -232,7 +232,11 @@ function register(getMainWindow, { writeSecretMigration }) {
           subtitle: subFilePaths[0] || null,
         });
         if (r?.ok && r.playerUrl) {
-          shell.openExternal(r.playerUrl);
+          if (typeof openLocalPlayer === "function") {
+            openLocalPlayer(r.playerUrl, path.basename(safeFilePath));
+          } else {
+            shell.openExternal(r.playerUrl);
+          }
           return;
         }
       } catch {}

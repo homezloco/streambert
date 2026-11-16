@@ -573,13 +573,11 @@ export default function DownloadsPage({
                   dl={dl}
                   fileExists={dl.isLocalOnly ? true : fileExistsCache[dl.id]}
                   onWatch={(subtitlePaths) =>
-                    subtitlePaths?.length > 0
-                      ? window.electron.openPathAtTime(
-                          dl.filePath,
-                          0,
-                          subtitlePaths,
-                        )
-                      : window.electron.openPath(dl.filePath)
+                    window.electron.openPathAtTime(
+                      dl.filePath,
+                      0,
+                      subtitlePaths || [],
+                    )
                   }
                   onHistory={onHistory}
                   onShowFolder={() =>

@@ -796,6 +796,7 @@ subtitlesIpc.register({
 hianimeIpc.register();
 playerIpc.register(getMainWindow, {
   writeSecretMigration: storageIpc.writeSecretMigration,
+  openLocalPlayer: openLocalPlayerWindow,
 });
 blockStats.init(getMainWindow);
 discordRpc.register(ipcMain);
@@ -872,6 +873,45 @@ ipcMain.handle(
 let pipWindow = null;
 let pipUaCustom = false;
 const getPipWindow = () => pipWindow;
+
+// Full-size in-app window for the local player page — used when Watch-ing a
+// downloaded file and no external player is installed. Unlike the PiP pop-out
+// this is normal-sized and not always-on-top.
+let localPlayerWindow = null;
+function openLocalPlayerWindow(url, title) {
+  if (!url) return;
+  if (!sessionsConfigured) {
+    sessionsConfigured = true;
+    const playerSession = session.fromPartition("persist:player");
+    const trailerSession = session.fromPartition("persist:trailer");
+    setupSession(playerSession, trailerSession);
+  }
+  if (localPlayerWindow && !localPlayerWindow.isDestroyed()) {
+    localPlayerWindow.loadURL(url);
+    localPlayerWindow.focus();
+    return;
+  }
+  localPlayerWindow = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    minWidth: 480,
+    minHeight: 270,
+    title: title ? `${title} - Streambert` : "Streambert Player",
+    backgroundColor: "#000000",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    frame: process.platform !== "win32",
+    webPreferences: {
+      partition: "persist:player",
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "popout-preload.js"),
+    },
+  });
+  installPopupHandler(localPlayerWindow.webContents);
+  siteTweaks.attach(localPlayerWindow.webContents);
+  localPlayerWindow.on("closed", () => (localPlayerWindow = null));
+  localPlayerWindow.loadURL(url);
+}
 
 ipcMain.handle("open-pip-window", (_, { url, title, userAgent }) => {
   if (!url || url === "about:blank") return { ok: false, reason: "no-url" };
