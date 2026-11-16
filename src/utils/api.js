@@ -1,4 +1,4 @@
-import { cinemetaFetch, resolveTmdbId } from "./cinemeta";
+import { cinemetaFetch, resolveTmdbId } from "./cinemeta.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMG_BASE = "https://image.tmdb.org/t/p";
@@ -166,11 +166,14 @@ export const tmdbFetch = async (path, apiKey) => {
 // Documentation:
 // https://vsembed.su/api/
 // https://peachify.top/
+// https://vidlink.pro
 // https://vidfast.vc
+// https://vidjoy.pro
 // https://vidlove.cc/#embed
 // https://rentry.co/aetherdomains
 // https://vidrift.net/docs
 // https://vidnest.fun
+// https://vidrock.net
 // https://devideosrc.co/docs
 // https://frembed.bar/api-docs
 // https://on.kinohub.vip/
@@ -199,6 +202,24 @@ export const PLAYER_SOURCES = [
       `https://vsembed.su/embed/tv/${id}/${season}/${ep}`,
   },
   {
+    id: "vidlink",
+    label: "VidLink",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    colorParam: "primaryColor", // hex without # → e.g. "B20710"
+    langParam: null,
+    params: {
+      autoplay: "true",
+      poster: "true",
+      title: "true",
+      nextbutton: "false",
+    },
+    movieUrl: (id) => `https://vidlink.pro/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://vidlink.pro/tv/${id}/${season}/${ep}`,
+  },
+  {
     id: "vidfast",
     label: "Vidfast",
     tag: null,
@@ -216,6 +237,19 @@ export const PLAYER_SOURCES = [
     movieUrl: (id) => `https://vidfast.vc/movie/${id}`,
     tvUrl: (id, season, ep) =>
       `https://vidfast.vc/tv/${id}/${season}/${ep}`,
+  },
+  {
+    id: "vidjoy",
+    label: "VidJoy",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://vidjoy.pro/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://vidjoy.pro/embed/tv/${id}/${season}/${ep}`,
   },
   {
     id: "vidlove",
@@ -283,6 +317,19 @@ export const PLAYER_SOURCES = [
       `https://vidnest.fun/anime/${anilistId}/${ep}/${lang}`,
   },
   {
+    id: "vidrock",
+    label: "VidRock",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://vidrock.net/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://vidrock.net/tv/${id}/${season}/${ep}`,
+  },
+  {
     id: "devideosrc",
     label: "DeVideoSrc",
     tag: null,
@@ -345,7 +392,15 @@ export const PLAYER_SOURCES = [
 ];
 
 // Sources that require a transparent webRequest intercept to load properly
-export const NEEDS_INTERCEPT = ["vidsrc", "devideosrc", "frembed", "kinohub"];
+export const NEEDS_INTERCEPT = [
+  "vidsrc",
+  "vidlink",
+  "vidjoy",
+  "vidrock",
+  "devideosrc",
+  "frembed",
+  "kinohub",
+];
 
 export const getSourceUrl = (
   sourceId,
