@@ -15,6 +15,8 @@ const SITES = [
   { id: "javmost", name: "JavMost", url: "https://javmost.cx" },
   { id: "javtiful", name: "Javtiful", url: "https://javtiful.com" },
   { id: "javhd", name: "JavHD", url: "https://javhd.today" },
+  { id: "javenglish", name: "JavEng", url: "https://javenglish.cc" },
+  { id: "javhdsub", name: "JavHD-Sub", url: "https://javhd.today/jav-sub/" },
   {
     id: "noodlemagazine",
     name: "Noodle",
