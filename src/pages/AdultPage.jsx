@@ -10,7 +10,6 @@ const SITES = [
   { id: "redtube", name: "RedTube", url: "https://www.redtube.com" },
   { id: "hqporner", name: "HQPorner", url: "https://hqporner.com" },
   { id: "hanime", name: "Hanime", url: "https://hanime.tv" },
-  { id: "missav", name: "MissAV", url: "https://missav.com" },
   { id: "rule34video", name: "Rule34", url: "https://rule34video.com" },
   { id: "chaturbate", name: "Chaturbate", url: "https://chaturbate.com" },
 ];
