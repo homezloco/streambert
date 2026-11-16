@@ -22,30 +22,65 @@ const ORDERS = [
   { id: "top-weekly", label: "Top weekly" },
   { id: "top-monthly", label: "Top monthly" },
   { id: "top-rated", label: "Top rated" },
+  { id: "most-voted", label: "Most voted" },
   { id: "popular", label: "Most viewed" },
   { id: "latest", label: "Newest" },
   { id: "longest", label: "Longest" },
+];
+
+// Client-side filters — the API only supports query/order, but every item
+// carries length_sec and rate, so these are applied to each fetched page.
+const DURS = [
+  { id: "", label: "Any length" },
+  { id: "short", label: "< 5 min", test: (s) => s < 300 },
+  { id: "mid", label: "5–15 min", test: (s) => s >= 300 && s < 900 },
+  { id: "long", label: "15–30 min", test: (s) => s >= 900 && s < 1800 },
+  { id: "xlong", label: "30+ min", test: (s) => s >= 1800 },
+];
+
+const RATINGS = [
+  { id: "", label: "Any rating" },
+  { id: "4", label: "4+ rating", min: 4 },
+  { id: "4.5", label: "4.5+ rating", min: 4.5 },
 ];
 
 const CATS = [
   "Amateur",
   "Anal",
   "Asian",
+  "Big Ass",
   "Big Tits",
+  "Blonde",
   "Blowjob",
+  "Brunette",
+  "Compilation",
   "Creampie",
   "Cumshot",
   "Ebony",
+  "Fetish",
+  "Gangbang",
+  "Group",
   "Hardcore",
   "Hentai",
   "Interracial",
   "Latina",
   "Lesbian",
   "Massage",
+  "Masturbation",
+  "Mature",
   "MILF",
+  "Orgy",
+  "Parody",
   "POV",
+  "Public",
+  "Redhead",
+  "Small Tits",
+  "Solo",
+  "Squirt",
   "Teen",
   "Threesome",
+  "Toys",
+  "Webcam",
 ];
 
 const fmtViews = (n) =>
@@ -109,6 +144,8 @@ export default function AdultPage() {
   // browse state
   const [cat, setCat] = useState(null);
   const [order, setOrder] = useState("top-weekly");
+  const [dur, setDur] = useState("");
+  const [minRate, setMinRate] = useState("");
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const [gay, setGay] = useState(false);
@@ -129,7 +166,7 @@ export default function AdultPage() {
     setVideos([]);
     setPage(1);
     setHasMore(true);
-  }, [cat, order, query, gay]);
+  }, [cat, order, query, gay, dur, minRate]);
 
   useEffect(() => {
     if (mode !== "browse") return;
@@ -137,13 +174,18 @@ export default function AdultPage() {
     setLoading(true);
     const q = query || cat || "all";
     const u =
-      `${API}?query=${encodeURIComponent(q)}&per_page=24&page=${page}` +
+      `${API}?query=${encodeURIComponent(q)}&per_page=40&page=${page}` +
       `&thumbsize=big&order=${order}${gay ? "&gay=1" : ""}`;
+    const durTest = DURS.find((d) => d.id === dur)?.test;
+    const rateMin = RATINGS.find((r) => r.id === minRate)?.min;
     fetch(u)
       .then((r) => r.json())
       .then((data) => {
         if (reqRef.current !== req) return;
-        const vids = Array.isArray(data?.videos) ? data.videos : [];
+        let vids = Array.isArray(data?.videos) ? data.videos : [];
+        if (durTest) vids = vids.filter((v) => durTest(v.length_sec || 0));
+        if (rateMin)
+          vids = vids.filter((v) => parseFloat(v.rate || "0") >= rateMin);
         setVideos((prev) => (page === 1 ? vids : [...prev, ...vids]));
         setHasMore(
           data?.total_pages ? page < data.total_pages : vids.length > 0,
@@ -243,6 +285,28 @@ export default function AdultPage() {
               {ORDERS.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="browse-sort"
+              value={dur}
+              onChange={(e) => setDur(e.target.value)}
+            >
+              {DURS.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="browse-sort"
+              value={minRate}
+              onChange={(e) => setMinRate(e.target.value)}
+            >
+              {RATINGS.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
                 </option>
               ))}
             </select>
