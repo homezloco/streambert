@@ -349,6 +349,106 @@ function installPopupHandler(wc) {
   });
 }
 
+// -- Adult-site hardening ------------------------------------------------------
+// Adult sites are far more aggressive than streaming embeds: document-wide
+// click handlers hijack the MAIN FRAME to ad pages (window.open is already
+// denied, so real popup windows can't appear), and full-viewport overlay
+// divs masquerade as popups with fake close buttons. Lock main-frame
+// navigation to the site's own domain and strip injected overlay ads.
+const ADULT_NAV_HOSTS = [
+  "eporner.com", "xvideos.com", "pornhub.com", "redtube.com",
+  "chaturbate.com", "xnxx.com", "hqporner.com", "hanime.tv",
+  "rule34video.com", "njav.tv", "javmost.cx", "javtiful.com",
+  "javhd.today",
+];
+// Noodlemagazine is an aggregator — outbound links are the content, so it
+// gets overlay-killing but not the navigation lock or off-domain click block.
+const ADULT_OVERLAY_ONLY_HOSTS = ["noodlemagazine.com"];
+const ADULT_ALL_HOSTS = [...ADULT_NAV_HOSTS, ...ADULT_OVERLAY_ONLY_HOSTS];
+
+function baseDomain(host) {
+  const parts = host.split(".");
+  return parts.length > 2 ? parts.slice(-2).join(".") : host;
+}
+
+function sameSiteDomain(urlA, urlB) {
+  try {
+    return (
+      baseDomain(new URL(urlA).hostname) === baseDomain(new URL(urlB).hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Injected into adult site pages: kills clicks that lead off-domain (ad
+// anchors) and full-screen overlay divs appended after load (extreme z-index
+// + viewport coverage is the classic ad-overlay signature; site modals
+// almost never use z-index >= 99999999).
+const ADULT_POPUNDER_JS = `(function () {
+  if (window.__sbAdGuard) return;
+  window.__sbAdGuard = true;
+  var allowOutbound = location.hostname.indexOf("noodlemagazine") !== -1;
+  function base(h) {
+    var p = h.split(".");
+    return p.length > 2 ? p.slice(-2).join(".") : h;
+  }
+  function offDomain(u) {
+    try {
+      return base(new URL(u, location.href).hostname) !== base(location.hostname);
+    } catch (e) {
+      return false;
+    }
+  }
+  if (!allowOutbound) {
+    document.addEventListener(
+      "click",
+      function (e) {
+        var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+        if (a && offDomain(a.getAttribute("href"))) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      },
+      true
+    );
+  }
+  function kill(el) {
+    try {
+      if (!el.querySelector || el.querySelector("video,canvas")) return;
+      var cs = getComputedStyle(el);
+      if (cs.position !== "fixed" && cs.position !== "absolute") return;
+      if (parseInt(cs.zIndex, 10) < 99999999) return;
+      var r = el.getBoundingClientRect();
+      if (r.width * r.height < innerWidth * innerHeight * 0.5) return;
+      el.remove();
+    } catch (e) {}
+  }
+  new MutationObserver(function (muts) {
+    for (var i = 0; i < muts.length; i++) {
+      var nodes = muts[i].addedNodes;
+      for (var j = 0; j < nodes.length; j++) {
+        if (nodes[j].nodeType === 1) kill(nodes[j]);
+      }
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
+})();`;
+
+// Cancels main-frame navigations that leave an adult site's domain
+// (click-hijack redirects). Installed on all player webviews; no-ops for
+// non-adult hosts.
+function guardAdultNavigation(wc) {
+  const onNav = (e, url, _isInPlace, isMainFrame) => {
+    try {
+      if (isMainFrame === false) return;
+      if (!urlMatchesHosts(wc.getURL(), ADULT_NAV_HOSTS)) return;
+      if (!sameSiteDomain(url, wc.getURL())) e.preventDefault();
+    } catch {}
+  };
+  wc.on("will-navigate", onNav);
+  wc.on("will-redirect", onNav);
+}
+
 // Sets the YouTube consent cookie (suppresses the consent gate) in a session.
 function setYoutubeConsentCookies(sess) {
   const ytCookie = {
@@ -576,6 +676,15 @@ function createWindow() {
     } catch {}
 
     installPopupHandler(wc);
+    guardAdultNavigation(wc);
+    // Inject the popunder/overlay killer on every page load on adult hosts.
+    wc.on("dom-ready", () => {
+      try {
+        if (urlMatchesHosts(wc.getURL(), ADULT_ALL_HOSTS)) {
+          wc.executeJavaScript(ADULT_POPUNDER_JS).catch(() => {});
+        }
+      } catch {}
+    });
     wc.on("enter-html-full-screen", () =>
       mainWindow.webContents.send("webview-enter-fullscreen"),
     );
