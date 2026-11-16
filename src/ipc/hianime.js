@@ -15,6 +15,7 @@ const { app, ipcMain, net } = require("electron");
 const https = require("https");
 const http = require("http");
 const fs = require("fs");
+const path = require("path");
 const dns = require("dns").promises;
 const netMod = require("net");
 const crypto = require("crypto");
@@ -512,6 +513,11 @@ let _currentVideoOrigin = null;
 let _currentVideoUA = null;
 let _currentVideoSubtitle = null;
 let _currentVideoStartTime = 0;
+// Registered local file + subtitle file for the /file and /sub routes.
+// The server only ever serves what was registered via setPlayerFile —
+// no arbitrary path param, so it can't become a file-read primitive.
+let _currentVideoFile = null;
+let _currentSubtitleFile = null;
 // Optional per-URL header lookup (captured from the embed's own requests).
 // Lets multi-CDN streams replay the right Referer/Origin per playlist host —
 // the embed fetched every playlist itself, so its headers are on record.
@@ -557,9 +563,10 @@ function rewritePlaylist(text, playlistUrl) {
     .join("\n");
 }
 
-function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
+function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
+  const isFile = !!opts.isFile;
   const track = subtitleUrl
-    ? `<track kind="subtitles" src="${escapeHtmlAttr(proxied(subtitleUrl))}" srclang="en" label="Subtitles" default>`
+    ? `<track kind="subtitles" src="${escapeHtmlAttr(isFile ? `/sub?t=${_serverToken}` : proxied(subtitleUrl))}" srclang="en" label="Subtitles" default>`
     : "";
   const start = Number.isFinite(Number(startTime)) ? Number(startTime) : 0;
   return `<!DOCTYPE html>
@@ -590,7 +597,7 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
   const levelsBox=document.getElementById('levels');
   const qsec=document.getElementById('qsec');
   const speedsBox=document.getElementById('speeds');
-  const src=${jsonForScript(proxied(videoUrl))};
+  const src=${jsonForScript(isFile ? `/file?t=${_serverToken}` : proxied(videoUrl))};
   const startTime=${start};
   gear.addEventListener('click',(e)=>{e.stopPropagation();menu.hidden=!menu.hidden;});
   menu.addEventListener('click',(e)=>e.stopPropagation());
@@ -627,7 +634,19 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
     paint();
     qsec.style.display='';
   }
-  if(window.Hls&&Hls.isSupported()){
+  const isFile=${isFile ? "true" : "false"};
+  if(isFile){
+    // local file served by /file — mp4/mkv play natively, no hls.js needed
+    qsec.style.display='none';
+    video.src=src;
+    if(startTime>0)video.addEventListener('loadedmetadata',()=>{video.currentTime=startTime;},{once:true});
+    video.play().catch(()=>{
+      video.muted=true;
+      video.play().catch(()=>{});
+      const un=()=>{video.muted=false;document.removeEventListener('click',un);document.removeEventListener('keydown',un);};
+      document.addEventListener('click',un);document.addEventListener('keydown',un);
+    });
+  }else if(window.Hls&&Hls.isSupported()){
     const hls=new Hls({autoStartLoad:false});
     window.__hls=hls;
     hls.loadSource(src);hls.attachMedia(video);
@@ -844,6 +863,88 @@ async function proxyRequest(target, req, res, hops = 0) {
   proxyReq.end();
 }
 
+const LOCAL_MEDIA_EXTENSIONS = new Set([
+  ".mp4",
+  ".mkv",
+  ".avi",
+  ".mov",
+  ".webm",
+  ".m4v",
+  ".ts",
+  ".m2ts",
+]);
+
+// Extensionless files (e.g. "vid_720p") are validated by magic bytes:
+// mp4/mov (ftyp), mkv/webm (EBML), MPEG-TS (0x47 sync), AVI (RIFF....AVI).
+function sniffMediaFile(p) {
+  try {
+    const fd = fs.openSync(p, "r");
+    const buf = Buffer.alloc(376);
+    const n = fs.readSync(fd, buf, 0, 376, 0);
+    fs.closeSync(fd);
+    if (n < 12) return false;
+    if (buf.subarray(4, 8).toString("ascii") === "ftyp") return true;
+    if (
+      buf[0] === 0x1a &&
+      buf[1] === 0x45 &&
+      buf[2] === 0xdf &&
+      buf[3] === 0xa3
+    )
+      return true;
+    if (buf[0] === 0x47 && n >= 376 && buf[188] === 0x47) return true;
+    if (
+      buf.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buf.subarray(8, 12).toString("ascii") === "AVI "
+    )
+      return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Resolve a renderer-supplied path to a real local media file, or null.
+// Accepts known media extensions or extensionless files that sniff as media.
+function resolveLocalMedia(p) {
+  if (typeof p !== "string" || !p) return null;
+  let real;
+  try {
+    real = fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+  const st = fs.statSync(real);
+  if (!st.isFile()) return null;
+  const ext = path.extname(real).toLowerCase();
+  if (!LOCAL_MEDIA_EXTENSIONS.has(ext) && !(ext === "" && sniffMediaFile(real)))
+    return null;
+  return real;
+}
+
+const MIME_BY_EXT = {
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
+  ".webm": "video/webm",
+  ".ts": "video/mp2t",
+  ".m2ts": "video/mp2t",
+  ".avi": "video/x-msvideo",
+};
+
+// Minimal .srt -> .vtt conversion for the <track> element.
+function srtToVtt(text) {
+  return (
+    "WEBVTT\n\n" +
+    text
+      .replace(/\r/g, "")
+      .replace(
+        /(\d{2}:\d{2}:\d{2}),(\d{3}) --> (\d{2}:\d{2}:\d{2}),(\d{3})/g,
+        "$1.$2 --> $3.$4",
+      )
+  );
+}
+
 let _hlsJs = null;
 function loadHlsJs() {
   if (_hlsJs) return _hlsJs;
@@ -888,12 +989,91 @@ function getPlayerServer() {
         });
         res.end(
           buildPlayerHtml(
-            _currentVideoUrl || "",
+            _currentVideoFile ? "/file" : _currentVideoUrl || "",
             _currentVideoStartTime || 0,
-            _currentVideoSubtitle,
+            _currentVideoFile ? !!_currentSubtitleFile : _currentVideoSubtitle,
             nonce,
+            { isFile: !!_currentVideoFile },
           ),
         );
+        return;
+      }
+
+      // Streams the registered local media file (setPlayerFile). Byte-range
+      // support is required for <video> seeking on mp4.
+      if (url.pathname === "/file") {
+        if (!_currentVideoFile) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        let stat;
+        try {
+          stat = fs.statSync(_currentVideoFile);
+        } catch {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        const mime =
+          MIME_BY_EXT[path.extname(_currentVideoFile).toLowerCase()] ||
+          "application/octet-stream";
+        const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+        if (range && (range[1] || range[2])) {
+          const start = range[1]
+            ? parseInt(range[1], 10)
+            : Math.max(0, stat.size - parseInt(range[2], 10));
+          const end = range[2]
+            ? Math.min(parseInt(range[2], 10), stat.size - 1)
+            : stat.size - 1;
+          if (start > end || start >= stat.size) {
+            res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
+            res.end();
+            return;
+          }
+          res.writeHead(206, {
+            "Content-Type": mime,
+            "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+            "Accept-Ranges": "bytes",
+            "Content-Length": end - start + 1,
+            "Cache-Control": "no-store",
+          });
+          fs.createReadStream(_currentVideoFile, { start, end }).pipe(res);
+          return;
+        }
+        res.writeHead(200, {
+          "Content-Type": mime,
+          "Accept-Ranges": "bytes",
+          "Content-Length": stat.size,
+          "Cache-Control": "no-store",
+        });
+        fs.createReadStream(_currentVideoFile).pipe(res);
+        return;
+      }
+
+      // Serves the registered subtitle file as WebVTT (.srt is converted).
+      if (url.pathname === "/sub") {
+        if (!_currentSubtitleFile) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        let text;
+        try {
+          text = fs.readFileSync(_currentSubtitleFile, "utf8");
+        } catch {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        if (path.extname(_currentSubtitleFile).toLowerCase() === ".srt")
+          text = srtToVtt(text);
+        res.writeHead(200, {
+          "Content-Type": "text/vtt; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        });
+        res.end(text);
         return;
       }
 
@@ -1027,8 +1207,40 @@ async function setPlayerVideo(args = {}) {
   _currentVideoUA = userAgent;
   _currentVideoSubtitle = subtitle;
   _currentVideoStartTime = asPosInt(args.startTime, 0);
+  _currentVideoFile = null;
+  _currentSubtitleFile = null;
   const server = await getPlayerServer();
   return {
+    playerUrl: `http://127.0.0.1:${server.address().port}/player?t=${_serverToken}`,
+  };
+}
+
+// Register a local media file (e.g. a download) with the local player server.
+// The /file and /sub routes only ever serve the paths registered here.
+async function setPlayerFile(args = {}) {
+  const file = resolveLocalMedia(asString(args.file, 4096));
+  if (!file) return { ok: false, error: "Not a readable media file" };
+  let sub = null;
+  const sp = args.subtitle;
+  if (typeof sp === "string" && sp) {
+    try {
+      const real = fs.realpathSync(sp);
+      const ext = path.extname(real).toLowerCase();
+      if (
+        fs.statSync(real).isFile() &&
+        (ext === ".srt" || ext === ".vtt")
+      )
+        sub = real;
+    } catch {}
+  }
+  _currentVideoUrl = null;
+  _currentVideoFile = file;
+  _currentSubtitleFile = sub;
+  _currentVideoSubtitle = null;
+  _currentVideoStartTime = asPosInt(args.startTime, 0);
+  const server = await getPlayerServer();
+  return {
+    ok: true,
     playerUrl: `http://127.0.0.1:${server.address().port}/player?t=${_serverToken}`,
   };
 }
@@ -1164,6 +1376,7 @@ function register() {
 module.exports = {
   register,
   setPlayerVideo,
+  setPlayerFile,
   setStreamMetaLookup,
   // exported for tests
   _internal: {
@@ -1171,5 +1384,7 @@ module.exports = {
     unwrapApiHtml,
     rewritePlaylist,
     normalizeTitle,
+    resolveLocalMedia,
+    sniffMediaFile,
   },
 };

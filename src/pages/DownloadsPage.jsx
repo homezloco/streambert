@@ -914,8 +914,12 @@ const LocalFileCard = memo(function LocalFileCard({
         episode: dl.episode != null ? Number(dl.episode) : null,
       });
     }
-    if (savedSecs > 0 && window.electron?.openPathAtTime) {
-      window.electron.openPathAtTime(dl.filePath, savedSecs, dl.subtitlePaths);
+    if (window.electron?.openPathAtTime) {
+      window.electron.openPathAtTime(
+        dl.filePath,
+        savedSecs || 0,
+        dl.subtitlePaths,
+      );
     } else {
       onWatch(dl.subtitlePaths);
     }

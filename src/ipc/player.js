@@ -119,10 +119,15 @@ function register(getMainWindow, { writeSecretMigration }) {
 
   // Validate a path: must have an allowed extension and must resolve to a
   // real absolute path (prevents path-traversal tricks like "../../bin/sh").
+  // Extensionless files pass only if their magic bytes sniff as media —
+  // downloads sometimes land without an extension (e.g. "vid_720p").
   const validateMediaPath = (p, allowedExts) => {
     if (typeof p !== "string" || !p) return null;
     const ext = path.extname(p).toLowerCase();
-    if (!allowedExts.has(ext)) return null;
+    if (!allowedExts.has(ext)) {
+      if (ext !== "") return null;
+      return hianime._internal.resolveLocalMedia(p);
+    }
     try {
       // fs.realpathSync throws if the file doesn't exist
       const real = fs.realpathSync(p);
@@ -136,7 +141,7 @@ function register(getMainWindow, { writeSecretMigration }) {
 
   ipcMain.handle(
     "open-path-at-time",
-    (_, { filePath, seconds, subtitlePaths }) => {
+    async (_, { filePath, seconds, subtitlePaths }) => {
       // ── Validate filePath ─────────────────────────────────────────────────
       const safeFilePath = validateMediaPath(
         filePath,
@@ -200,25 +205,37 @@ function register(getMainWindow, { writeSecretMigration }) {
       const vlcSubArgs =
         subFilePaths.length > 0 ? [`--sub-file=${subFilePaths[0]}`] : [];
 
-      if (sec > 0) {
-        for (const mpv of mpvPaths) {
-          if (tryLaunch(mpv, [`--start=${sec}`, ...mpvSubArgs, safeFilePath]))
-            return;
-        }
-        for (const vlc of vlcPaths) {
-          if (
-            tryLaunch(vlc, [`--start-time=${sec}`, ...vlcSubArgs, safeFilePath])
-          )
-            return;
-        }
-      } else if (mpvSubArgs.length > 0) {
-        for (const mpv of mpvPaths) {
-          if (tryLaunch(mpv, [...mpvSubArgs, safeFilePath])) return;
-        }
-        for (const vlc of vlcPaths) {
-          if (tryLaunch(vlc, [...vlcSubArgs, safeFilePath])) return;
-        }
+      // Try external players first — mpv preferred, then VLC.
+      for (const mpv of mpvPaths) {
+        const args = [
+          ...(sec > 0 ? [`--start=${sec}`] : []),
+          ...mpvSubArgs,
+          safeFilePath,
+        ];
+        if (tryLaunch(mpv, args)) return;
       }
+      for (const vlc of vlcPaths) {
+        const args = [
+          ...(sec > 0 ? [`--start-time=${sec}`] : []),
+          ...vlcSubArgs,
+          safeFilePath,
+        ];
+        if (tryLaunch(vlc, args)) return;
+      }
+      // No external player installed: use the app's own player page — the
+      // file is served through the token-guarded localhost server and the
+      // page opens in the user's browser.
+      try {
+        const r = await hianime.setPlayerFile({
+          file: safeFilePath,
+          startTime: sec,
+          subtitle: subFilePaths[0] || null,
+        });
+        if (r?.ok && r.playerUrl) {
+          shell.openExternal(r.playerUrl);
+          return;
+        }
+      } catch {}
       shell.openPath(safeFilePath);
     },
   );
