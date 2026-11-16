@@ -473,6 +473,10 @@ function guardAdultNavigation(wc) {
   const onNav = (e, url, _isInPlace, isMainFrame) => {
     try {
       if (isMainFrame === false) return;
+      // localhost is the app's own native-player server — always allowed so a
+      // captured stream can be swapped into the built-in player
+      if (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost"))
+        return;
       if (!urlMatchesHosts(wc.getURL(), ADULT_NAV_HOSTS)) return;
       if (!sameSiteDomain(url, wc.getURL())) e.preventDefault();
     } catch {}

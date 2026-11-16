@@ -385,30 +385,56 @@ export default function AdultPage() {
     const mp4Handler = window.electron.onMp4Found?.((url) => {
       if (!url.startsWith("http://127.0.0.1")) setMp4Url(url);
     });
+    const subHandler = window.electron.onSubtitleFound?.(({ url }) =>
+      setSubUrl(url),
+    );
+    setSubUrl(null);
     return () => {
       if (handler) window.electron.offM3u8Found?.(handler);
       if (mp4Handler) window.electron.offMp4Found?.(mp4Handler);
+      if (subHandler) window.electron.offSubtitleFound?.(subHandler);
     };
   }, [playing]);
 
   // ── Site-mode capture: same stream capture, armed for the nav ⬇ button ──
   const [siteStream, setSiteStream] = useState(null);
   const [siteDl, setSiteDl] = useState(null);
+  const [subUrl, setSubUrl] = useState(null); // latest captured .vtt
   useEffect(() => {
     if (mode === "browse" || playing || !window.electron) return;
     setSiteStream(null);
     setSiteDl(null);
+    setSubUrl(null);
     const h1 = window.electron.onM3u8Found?.(
       (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
     );
     const h2 = window.electron.onMp4Found?.(
       (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
     );
+    const h3 = window.electron.onSubtitleFound?.(({ url }) =>
+      setSubUrl(url),
+    );
     return () => {
       if (h1) window.electron.offM3u8Found?.(h1);
       if (h2) window.electron.offMp4Found?.(h2);
+      if (h3) window.electron.offSubtitleFound?.(h3);
     };
   }, [mode, playing]);
+
+  // Swap a captured stream into the app's own hls.js player — no site ads,
+  // native speed/quality controls, subtitle track if one was captured.
+  const playNative = async (url) => {
+    if (!url) return;
+    const res = await window.electron?.nativePlay?.({
+      url,
+      subtitle: subUrl || null,
+    });
+    if (res?.ok && res.playerUrl) {
+      try {
+        webviewRef.current.src = res.playerUrl;
+      } catch {}
+    }
+  };
 
   const startDownload = async () => {
     const downloadPath = storage.get("downloadPath");
@@ -521,6 +547,18 @@ export default function AdultPage() {
             ← Back
           </button>
           <span className="adult-playing-title">{playing.title}</span>
+          <button
+            className="btn btn-ghost dl-btn--sm"
+            disabled={!dlUrl}
+            title={
+              dlUrl
+                ? "Play the captured stream in the built-in player (ad-free)"
+                : "Waiting for the stream to load…"
+            }
+            onClick={() => playNative(dlUrl)}
+          >
+            ▶ Native
+          </button>
           {downloader?.token && (
             <button
               className="btn btn-secondary dl-btn--sm"
@@ -613,6 +651,18 @@ export default function AdultPage() {
               onClick={() => webviewRef.current?.reload()}
             >
               ⟳
+            </button>
+            <button
+              className="browse-tab"
+              disabled={!siteStream}
+              title={
+                siteStream
+                  ? "Play the captured stream in the built-in player (ad-free)"
+                  : "Play a video to capture its stream"
+              }
+              onClick={() => playNative(siteStream)}
+            >
+              ▶
             </button>
             {downloader?.token && (
               <button
