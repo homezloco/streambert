@@ -459,6 +459,82 @@ body,
     background: var(--border);
 }
 
+/* "See all" link inside section titles */
+.see-all {
+    background: none;
+    border: none;
+    color: var(--text3);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+    transition: color 0.12s;
+}
+.see-all:hover {
+    color: var(--text);
+}
+
+/* ── Browse page ─────────────────────────────────────────────────────────── */
+.browse-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.browse-tabs {
+    display: flex;
+    gap: 6px;
+}
+.browse-tab {
+    background: var(--bg2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.browse-tab:hover { color: var(--text); }
+.browse-tab--active {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+}
+.browse-sort {
+    background: var(--bg2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.browse-genres {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.browse-chip {
+    background: var(--bg2, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.browse-chip:hover { color: var(--text); }
+.browse-chip--active {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+}
+
 /* ── Cards ──────────────────────────────────────────────────────────────── */
 .cards-grid {
     display: grid;

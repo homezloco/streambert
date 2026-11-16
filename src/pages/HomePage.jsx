@@ -46,6 +46,7 @@ export default function HomePage({
   onMarkUnwatched,
   history,
   apiKey,
+  onBrowse,
 }) {
   const hero = trending[0];
 
@@ -396,6 +397,7 @@ export default function HomePage({
               title="Trending Movies"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
+              seeAll={onBrowse ? () => onBrowse({ type: "movie" }) : undefined}
             />
           );
         }
@@ -416,6 +418,7 @@ export default function HomePage({
               title="Trending Series"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
+              seeAll={onBrowse ? () => onBrowse({ type: "tv" }) : undefined}
             />
           );
         }
@@ -431,6 +434,11 @@ export default function HomePage({
               title="Top Rated"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
+              seeAll={
+                onBrowse
+                  ? () => onBrowse({ type: "movie", sort: "vote_average.desc" })
+                  : undefined
+              }
             />
           );
         }

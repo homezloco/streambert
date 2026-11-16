@@ -1,4 +1,6 @@
-import { cinemetaFetch, resolveTmdbId } from "./cinemeta.js";
+import { cinemetaFetch, resolveTmdbId, MOVIE_GENRES, TV_GENRES } from "./cinemeta.js";
+
+export { MOVIE_GENRES, TV_GENRES };
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMG_BASE = "https://image.tmdb.org/t/p";

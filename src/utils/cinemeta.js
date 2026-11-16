@@ -356,9 +356,30 @@ export async function resolveTmdbId(type, anyId) {
   return meta.moviedb_id;
 }
 
-async function catalog(type, catalogId) {
+// TMDB genre id → display name, used to translate /discover?with_genres into
+// Cinemeta's genre= catalogs (which happen to share TMDB's genre names).
+export const MOVIE_GENRES = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy",
+  36: "History", 27: "Horror", 10402: "Music", 9648: "Mystery",
+  10749: "Romance", 878: "Science Fiction", 10770: "TV Movie", 53: "Thriller",
+  10752: "War", 37: "Western",
+};
+export const TV_GENRES = {
+  10759: "Action & Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 10762: "Kids",
+  9648: "Mystery", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy",
+  10766: "Soap", 10767: "Talk", 10768: "War & Politics", 37: "Western",
+};
+
+async function catalog(type, catalogId, { skip = 0, genre = null } = {}) {
+  // Cinemeta catalog extra params are path segments before .json.
+  // genre= and skip= may not be combined (server rejects it) — genre wins.
+  const parts = [catalogId];
+  if (genre) parts.push(`genre=${encodeURIComponent(genre)}`);
+  else if (skip > 0) parts.push(`skip=${skip}`);
   const data = await cmGet(
-    `${CINEMETA_BASE}/catalog/${type}/${catalogId}.json`,
+    `${CINEMETA_BASE}/catalog/${type}/${parts.join("/")}.json`,
   );
   return { results: (data.metas || []).map((m) => metaToItem(m, type)) };
 }
@@ -409,6 +430,31 @@ export async function cinemetaFetch(path) {
   m = pathname.match(/^\/(movie|tv)\/top_rated$/);
   if (m)
     return catalog(m[1] === "movie" ? "movie" : "series", "imdbRating");
+
+  // /{movie|tv}/popular?page=N → top catalog with skip pagination
+  m = pathname.match(/^\/(movie|tv)\/popular$/);
+  if (m) {
+    const page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
+    return catalog(m[1] === "movie" ? "movie" : "series", "top", {
+      skip: (page - 1) * 100,
+    });
+  }
+
+  // /discover/{movie|tv}?sort_by=&with_genres=&page=N
+  m = pathname.match(/^\/discover\/(movie|tv)$/);
+  if (m) {
+    const type = m[1] === "movie" ? "movie" : "series";
+    const page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
+    const sort = params.get("sort_by") || "popularity.desc";
+    const catalogId = sort === "vote_average.desc" ? "imdbRating" : "top";
+    const genreId = params.get("with_genres");
+    const genreMap = m[1] === "movie" ? MOVIE_GENRES : TV_GENRES;
+    const genre = genreId ? genreMap[genreId] || null : null;
+    return catalog(type, catalogId, {
+      skip: (page - 1) * 100,
+      genre,
+    });
+  }
 
   // /search/multi
   m = pathname.match(/^\/search\/(multi|movie|tv)$/);

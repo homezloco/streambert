@@ -41,6 +41,7 @@ import { useGamepadNav } from "./utils/useGamepadNav";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
 const HomePage = lazy(() => import("./pages/HomePage"));
+const BrowsePage = lazy(() => import("./pages/BrowsePage"));
 const MoviePage = lazy(() => import("./pages/MoviePage"));
 const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
@@ -1078,6 +1079,17 @@ export default function App() {
                 onMarkUnwatched={markUnwatched}
                 history={history}
                 apiKey={apiKey}
+                onBrowse={(params) => navigate("browse", params)}
+              />
+            )}
+            {page === "browse" && (
+              <BrowsePage
+                apiKey={apiKey}
+                onSelect={handleSelectResult}
+                watched={watched}
+                onMarkWatched={markWatched}
+                onMarkUnwatched={markUnwatched}
+                initial={selected}
               />
             )}
             {page === "movie" && selected && (

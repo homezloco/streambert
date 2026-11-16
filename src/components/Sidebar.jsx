@@ -124,6 +124,12 @@ export default function Sidebar({
         label="Home"
       />
       <SideBtn
+        active={page === "browse"}
+        onClick={() => onNavigate("browse")}
+        icon={<FilmIcon />}
+        label="Browse"
+      />
+      <SideBtn
         active={page === "history"}
         onClick={() => onNavigate("history")}
         icon={<HistoryIcon />}

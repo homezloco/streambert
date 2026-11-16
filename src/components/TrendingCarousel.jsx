@@ -153,6 +153,7 @@ export default function TrendingCarousel({
   title,
   titleHighlight,
   ratingsMap = {},
+  seeAll,
 }) {
   const count = items.length;
   const activeRef = useRef(0);
@@ -379,6 +380,11 @@ export default function TrendingCarousel({
           </>
         ) : (
           title
+        )}
+        {seeAll && (
+          <button className="see-all" onClick={seeAll}>
+            See all →
+          </button>
         )}
       </div>
 
