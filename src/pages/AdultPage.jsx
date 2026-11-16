@@ -7,6 +7,7 @@ const SITES = [
   { id: "xvideos", name: "XVideos", url: "https://www.xvideos.com" },
   { id: "pornhub", name: "Pornhub", url: "https://www.pornhub.com" },
   { id: "redtube", name: "RedTube", url: "https://www.redtube.com" },
+  { id: "chaturbate", name: "Chaturbate", url: "https://chaturbate.com" },
 ];
 
 export default function AdultPage() {
