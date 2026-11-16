@@ -460,7 +460,9 @@ export default function AdultPage() {
     const wv = webviewRef.current;
     if (!wv?.setZoomFactor) return;
     try {
-      wv.setZoomFactor(Math.min(2, Math.max(0.4, wv.getZoomFactor() + d)));
+      const z = Math.min(2, Math.max(0.4, wv.getZoomFactor() + d));
+      wv.setZoomFactor(z);
+      storage.set("adultZoom_" + `${mode}-${zoomSiteId}`, z);
     } catch {}
   };
   const popOut = () => {
@@ -503,6 +505,41 @@ export default function AdultPage() {
     });
     setSiteDl(result?.ok ? "started" : "error");
   };
+
+  // ── Infinite scroll: auto-load the next page near the bottom ──
+  const browseRef = useRef(null);
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading)
+          setPage((p) => p + 1);
+      },
+      { root: browseRef.current, rootMargin: "600px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, loading, mode]);
+
+  // ── Per-site zoom memory: restore the saved factor once the page is up ──
+  const zoomSiteId =
+    mode === "images" ? imgSite : mode === "creators" ? creatorSite : site;
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv || mode === "browse" || playing) return;
+    const apply = () => {
+      const z = storage.get("adultZoom_" + `${mode}-${zoomSiteId}`);
+      if (z && wv.setZoomFactor) {
+        try {
+          wv.setZoomFactor(z);
+        } catch {}
+      }
+    };
+    wv.addEventListener("dom-ready", apply);
+    return () => wv.removeEventListener("dom-ready", apply);
+  }, [mode, playing, zoomSiteId]);
 
   // Same cleanup as the player pages: release tracked player webContents.
   useEffect(() => {
@@ -797,7 +834,7 @@ export default function AdultPage() {
           className="adult-webview"
         />
       ) : (
-        <div className="adult-browse">
+        <div className="adult-browse" ref={browseRef}>
           {recents.length > 0 && (
             <div className="browse-genres adult-recents">
               <span className="adult-recents-label">Recent:</span>
@@ -852,12 +889,15 @@ export default function AdultPage() {
             <div className="adult-empty">No videos found.</div>
           )}
           {hasMore && !loading && videos.length > 0 && (
-            <button
-              className="btn btn-secondary adult-more"
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Load more
-            </button>
+            <>
+              <div ref={sentinelRef} />
+              <button
+                className="btn btn-secondary adult-more"
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Load more
+              </button>
+            </>
           )}
         </div>
       )}
