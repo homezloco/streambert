@@ -2542,9 +2542,11 @@ function NetworkSection() {
   const [saved, setSaved] = useState(false);
   const [restartNeeded, setRestartNeeded] = useState(false);
   const [cleared, setCleared] = useState(false);
+  const [blockStats, setBlockStats] = useState(null);
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
+    window.electron?.getBlockStats?.().then(setBlockStats).catch(() => {});
   }, []);
 
   const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
@@ -2727,6 +2729,41 @@ function NetworkSection() {
           </div>
         </div>
       </div>
+
+      {blockStats && (
+        <>
+          <div className="settings-section-title">Ad &amp; tracker blocking</div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--text2)",
+              marginBottom: 16,
+            }}
+          >
+            <span style={{ color: "#4caf50", fontWeight: 600 }}>
+              {blockStats.total.toLocaleString()}
+            </span>{" "}
+            ad/tracker requests blocked this session
+            {blockStats.domains && (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 12,
+                  color: "var(--text3)",
+                  lineHeight: 1.6,
+                }}
+              >
+                Top blocked:{" "}
+                {Object.entries(blockStats.domains)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 5)
+                  .map(([d, n]) => `${d} (${n})`)
+                  .join(", ")}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button className="btn btn-primary" onClick={save}>

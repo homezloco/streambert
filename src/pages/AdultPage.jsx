@@ -379,6 +379,32 @@ export default function AdultPage() {
     setDlState(result?.ok ? "started" : "error");
   };
 
+  const zoomWebview = (d) => {
+    const wv = webviewRef.current;
+    if (!wv?.setZoomFactor) return;
+    try {
+      wv.setZoomFactor(Math.min(2, Math.max(0.4, wv.getZoomFactor() + d)));
+    } catch {}
+  };
+  const popOut = () => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    try {
+      window.electron?.openPipWindow?.(
+        wv.getURL(),
+        wv.getTitle?.() || current.name,
+      );
+    } catch {}
+  };
+  const openExt = () => {
+    const wv = webviewRef.current;
+    if (wv) {
+      try {
+        window.electron?.openExternal?.(wv.getURL());
+      } catch {}
+    }
+  };
+
   const startSiteDownload = async () => {
     const downloadPath = storage.get("downloadPath");
     if (!downloader?.token || !downloadPath || !siteStream) return;
@@ -551,6 +577,34 @@ export default function AdultPage() {
                 {siteDl === "started" ? "✓" : siteDl === "error" ? "!" : "⬇"}
               </button>
             )}
+            <button
+              className="browse-tab"
+              title="Zoom out"
+              onClick={() => zoomWebview(-0.15)}
+            >
+              −
+            </button>
+            <button
+              className="browse-tab"
+              title="Zoom in"
+              onClick={() => zoomWebview(0.15)}
+            >
+              +
+            </button>
+            <button
+              className="browse-tab"
+              title="Pop out into a separate window"
+              onClick={popOut}
+            >
+              ⧉
+            </button>
+            <button
+              className="browse-tab"
+              title="Open in external browser (leaves the hardened session)"
+              onClick={openExt}
+            >
+              ↗
+            </button>
           </div>
         )}
         {mode === "browse" && (
