@@ -45,6 +45,10 @@ const downloadsIpc = require("./src/ipc/downloads");
 const subtitlesIpc = require("./src/ipc/subtitles");
 const hianimeIpc = require("./src/ipc/hianime");
 const playerIpc = require("./src/ipc/player");
+const networkIpc = require("./src/ipc/network");
+
+// WebRTC IP-leak protection is a command-line switch — must land before ready.
+networkIpc.applyWebRtcFlag();
 const discordRpc = require("./src/ipc/discordRpc");
 
 // -- Ad/tracker block list -----------------------------------------------------
@@ -631,6 +635,8 @@ playerIpc.register(getMainWindow, {
 });
 blockStats.init(getMainWindow);
 discordRpc.register(ipcMain);
+networkIpc.register();
+app.whenReady().then(() => networkIpc.applyNetwork());
 
 // get-block-stats lives with its data
 ipcMain.handle("get-block-stats", () => blockStats.getBlockStats());

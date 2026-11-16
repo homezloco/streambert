@@ -2537,6 +2537,213 @@ function Divider() {
 // ── Search & Nav Bar ──────────────────────────────────────────────────────────
 const SUPPORTS_HIGHLIGHT =
   typeof CSS !== "undefined" && typeof CSS.highlights !== "undefined";
+function NetworkSection() {
+  const [cfg, setCfg] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [restartNeeded, setRestartNeeded] = useState(false);
+
+  useEffect(() => {
+    window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
+  }, []);
+
+  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
+
+  const save = async () => {
+    const r = await window.electron?.setNetworkSettings?.(cfg);
+    setRestartNeeded(!!r?.restartRequired);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  if (!cfg) return null;
+
+  const rowLabel = {
+    fontSize: 13,
+    color: "var(--text2)",
+    display: "block",
+    marginBottom: 6,
+  };
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div className="settings-section-title">Proxy</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        Route all of Streambert's traffic (player webviews included) through a
+        SOCKS5 or HTTP proxy — e.g. your VPN's SOCKS5 endpoint. A system-wide
+        VPN already covers the app; this is for per-app routing.
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        <select
+          className="apikey-input"
+          style={{ width: 150, marginBottom: 0 }}
+          value={cfg.proxyMode}
+          onChange={(e) => set("proxyMode", e.target.value)}
+        >
+          <option value="off">Off</option>
+          <option value="socks5">SOCKS5</option>
+          <option value="http">HTTP</option>
+        </select>
+        <input
+          className="apikey-input"
+          style={{ flex: 1, minWidth: 140, marginBottom: 0 }}
+          placeholder="host (e.g. 127.0.0.1)"
+          disabled={cfg.proxyMode === "off"}
+          value={cfg.proxyHost}
+          onChange={(e) => set("proxyHost", e.target.value)}
+        />
+        <input
+          className="apikey-input"
+          style={{ width: 90, marginBottom: 0 }}
+          placeholder="port"
+          disabled={cfg.proxyMode === "off"}
+          value={cfg.proxyPort}
+          onChange={(e) => set("proxyPort", e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <label style={rowLabel}>
+          Bypass list (optional, comma-separated hosts that skip the proxy)
+        </label>
+        <input
+          className="apikey-input"
+          style={{ flex: 1, minWidth: 260, marginBottom: 0, width: "100%" }}
+          placeholder="localhost, *.internal.lan"
+          disabled={cfg.proxyMode === "off"}
+          value={cfg.proxyBypass}
+          onChange={(e) => set("proxyBypass", e.target.value)}
+        />
+      </div>
+
+      <div className="settings-section-title">Secure DNS (DoH)</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        Encrypt DNS lookups made inside the app. Redundant if your VPN already
+        handles DNS, useful otherwise.
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 24,
+        }}
+      >
+        <select
+          className="apikey-input"
+          style={{ width: 180, marginBottom: 0 }}
+          value={cfg.dohMode}
+          onChange={(e) => set("dohMode", e.target.value)}
+        >
+          <option value="off">Off (system DNS)</option>
+          <option value="cloudflare">Cloudflare</option>
+          <option value="google">Google</option>
+          <option value="quad9">Quad9</option>
+          <option value="custom">Custom URL…</option>
+        </select>
+        {cfg.dohMode === "custom" && (
+          <input
+            className="apikey-input"
+            style={{ flex: 1, minWidth: 260, marginBottom: 0 }}
+            placeholder="https://your-doh-server/dns-query"
+            value={cfg.dohCustom}
+            onChange={(e) => set("dohCustom", e.target.value)}
+          />
+        )}
+      </div>
+
+      <div className="settings-section-title">WebRTC leak protection</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        Prevents embedded sites from discovering your real or local IP through
+        WebRTC. Takes effect on next app start.
+      </div>
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "0 16px",
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 14,
+            padding: "16px 0",
+          }}
+        >
+          <Toggle
+            value={cfg.webrtcProtect}
+            onChange={(v) => set("webrtcProtect", v)}
+          />
+          <div style={{ flex: 1 }}>
+            <div
+              style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}
+            >
+              Block non-proxied WebRTC traffic
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: "var(--text3)",
+                marginTop: 3,
+                lineHeight: 1.5,
+              }}
+            >
+              Forces WebRTC onto the default route only, so ICE candidates
+              can't expose alternate interfaces or your real IP.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button className="btn btn-primary" onClick={save}>
+          Save
+        </button>
+        {saved && (
+          <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Saved</span>
+        )}
+        {restartNeeded && (
+          <span style={{ fontSize: 13, color: "var(--text3)" }}>
+            Restart the app for the WebRTC change to apply
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const SECTION_NAV = [
   {
     id: "updates",
@@ -2704,6 +2911,23 @@ const SECTION_NAV = [
       "scheduled",
       "json",
       "backup file",
+    ],
+  },
+  {
+    id: "network",
+    label: "Privacy & Network",
+    icon: "🔒",
+    keywords: [
+      "proxy",
+      "vpn",
+      "socks5",
+      "dns",
+      "doh",
+      "webrtc",
+      "privacy",
+      "network",
+      "ip",
+      "leak",
     ],
   },
   {
@@ -3373,6 +3597,7 @@ export default function SettingsPage({
   const secDiscordRpc = useRef(null);
   const secInterface = useRef(null);
   const secLibrary = useRef(null);
+  const secNetwork = useRef(null);
   const secBackup = useRef(null);
   const secStorage = useRef(null);
 
@@ -3386,6 +3611,7 @@ export default function SettingsPage({
     discordRpc: secDiscordRpc,
     interface: secInterface,
     library: secLibrary,
+    network: secNetwork,
     backup: secBackup,
     storage: secStorage,
   };
@@ -4330,6 +4556,17 @@ export default function SettingsPage({
             subtitle="Watchlist sort order and watch history preferences"
           />
           <LibraryPrivacySection />
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP: PRIVACY & NETWORK                                           */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        <div ref={secNetwork} style={{ scrollMarginTop: 80 }}>
+          <SectionGroupHeader
+            title="Privacy & Network"
+            subtitle="Proxy, encrypted DNS, and IP-leak protection"
+          />
+          <NetworkSection />
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════ */}

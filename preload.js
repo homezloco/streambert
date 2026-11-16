@@ -140,6 +140,8 @@ contextBridge.exposeInMainWorld("electron", {
   secureSet: (key, value) =>
     ipcRenderer.invoke("secure-store-set", { key, value }),
   // Picture-in-Picture pop-out (full player UI, only one stream active at a time)
+  getNetworkSettings: () => ipcRenderer.invoke("network-get"),
+  setNetworkSettings: (s) => ipcRenderer.invoke("network-set", s),
   openPipWindow: (url, title, userAgent = null) =>
     ipcRenderer.invoke("open-pip-window", { url, title, userAgent }),
   closePipWindow: () => ipcRenderer.invoke("close-pip-window"),
