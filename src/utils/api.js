@@ -436,6 +436,34 @@ export const PLAYER_SOURCES = [
     movieUrl: (id) => `https://on.kinohub.vip/movie/${id}`,
   },
   {
+    id: "multiembed",
+    label: "MultiEmbed",
+    tag: null,
+    note: "Aggregator", // multiple backend servers selectable in its UI
+    supportsProgress: true,
+    progressViaFrames: true, // actual player sits in a nested provider iframe
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    tvUrl: (id, season, ep) =>
+      `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${ep}`,
+  },
+  {
+    id: "2embed",
+    label: "2Embed",
+    tag: null,
+    note: "Aggregator",
+    supportsProgress: true,
+    progressViaFrames: true,
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`,
+  },
+  {
     id: "hianime",
     label: "HiAnime",
     tag: "ANIME",
@@ -461,6 +489,8 @@ export const NEEDS_INTERCEPT = [
   "vixsrc",
   "nontongo",
   "kinohub",
+  "multiembed",
+  "2embed",
 ];
 
 export const getSourceUrl = (
