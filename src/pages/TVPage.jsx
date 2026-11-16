@@ -64,6 +64,9 @@ import {
   getFailoverSource,
   setFailoverSource,
   clearFailoverSource,
+  getSourceStats,
+  recordSourceResult,
+  sourceScore,
 } from "../utils/storage";
 import { useAutoplay } from "../utils/useAutoplay";
 import { fetchAniSkipTimings } from "../utils/aniSkip";
@@ -447,6 +450,11 @@ export default function TVPage({
   const [playerSource, setPlayerSource] = useState(
     () => storage.get("playerSource") || NON_ANIME_DEFAULT_SOURCE,
   );
+  // Mirrors for effects/handlers with empty deps
+  const playerSourceRef = useRef(playerSource);
+  playerSourceRef.current = playerSource;
+  // Source reliability: true once this play produced a stream or video
+  const statsOkRef = useRef(false);
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
   const playerAccentColor = playerSettings?.accentColor ?? null;
@@ -849,6 +857,7 @@ export default function TVPage({
           // automatically and remember the choice for next time.
           const next = getNextNonAsyncSource(playerSource);
           if (next) {
+            recordSourceResult(playerSource, false);
             setFailoverSource(epKey, next);
             setM3u8Url(null);
             setInterceptedSubs([]);
@@ -881,9 +890,35 @@ export default function TVPage({
     if (!window.electron) return;
     const handler = window.electron.onM3u8Found((url) => {
       setM3u8Url((prev) => (prev !== url ? url : prev));
+      // A real stream URL means the source delivered — count it once per play
+      if (!statsOkRef.current) {
+        statsOkRef.current = true;
+        recordSourceResult(playerSourceRef.current, true);
+      }
     });
     return () => window.electron.offM3u8Found(handler);
   }, []);
+
+  // m3u8Url resets to null on every play/source/episode change → re-arm stats
+  useEffect(() => {
+    if (!m3u8Url) statsOkRef.current = false;
+  }, [m3u8Url]);
+
+  // A play that produced no stream and no resolved URL after 30s counts as a
+  // source failure (dead source, geo-block, broken embed).
+  useEffect(() => {
+    if (!playing) return;
+    const t = setTimeout(() => {
+      if (
+        !statsOkRef.current &&
+        !resolvedPlayerUrlRef.current &&
+        !nativeSwapRef.current
+      ) {
+        recordSourceResult(playerSourceRef.current, false);
+      }
+    }, 30000);
+    return () => clearTimeout(t);
+  }, [playing, playerSource, selectedEp]);
 
   // Native player: on the first real stream URL, replay it through the app's
   // own hls.js player and swap the webview to it (killing the embed). Runs at
@@ -1502,6 +1537,12 @@ export default function TVPage({
             durationRef.current = result.duration;
             const ct = result.currentTime;
 
+            // Video actually playing (covers progressive mp4 too) → source ok
+            if (ct > 2 && !statsOkRef.current) {
+              statsOkRef.current = true;
+              recordSourceResult(playerSource, true);
+            }
+
             // ── Resolution-change reset detection ──────────────────────────
             // Videasy resets to 0 on quality change. We only seek back if:
             // - ct is near zero (≤5s)
@@ -1683,6 +1724,25 @@ export default function TVPage({
 
   const playEpisode = useCallback(
     (ep) => {
+      // If the saved source has proven unreliable, silently prefer the best
+      // proven one — the user can always override in the source menu.
+      const sel = sourceScore(playerSource);
+      if (sel !== null && sel < 0.35) {
+        let best = null;
+        let bestScore = 0;
+        for (const src of PLAYER_SOURCES) {
+          if (src.id === playerSource || src.async) continue;
+          const sc = sourceScore(src.id);
+          if (sc !== null && sc > bestScore) {
+            best = src.id;
+            bestScore = sc;
+          }
+        }
+        if (best && bestScore >= 0.6) {
+          setPlayerSource(best);
+          storage.set(STORAGE_KEYS.PLAYER_SOURCE, best);
+        }
+      }
       setM3u8Url(null);
       setInterceptedSubs([]);
       setNativePlayerUrl(null);
@@ -1703,7 +1763,7 @@ export default function TVPage({
       });
       // d and selectedSeason are stable within a season view; onHistory is useCallback in App
     },
-    [d, selectedSeason, onHistory],
+    [d, selectedSeason, onHistory, playerSource],
   );
 
   const nextEp = useMemo(() => {
@@ -2417,7 +2477,9 @@ export default function TVPage({
                     onClick={(e) => e.stopPropagation()}
                   >
                     {PLAYER_SOURCES.filter((src) => !src.movieOnly).map(
-                      (src) => (
+                      (src) => {
+                        const sc = sourceScore(src.id);
+                        return (
                         <button
                           key={src.id}
                           className={
@@ -2459,8 +2521,15 @@ export default function TVPage({
                               {src.note}
                             </span>
                           )}
+                          {sc !== null && (
+                            <span
+                              className={`source-dot source-dot--${sc >= 0.7 ? "good" : sc >= 0.4 ? "mid" : "bad"}`}
+                              title={`${Math.round(sc * 100)}% of plays worked`}
+                            />
+                          )}
                         </button>
-                      ),
+                        );
+                      },
                     )}
                   </div>
                 )}

@@ -97,6 +97,9 @@ export const STORAGE_KEYS = {
   // Per-episode fallback source when the default (typically HiAnime) lacks
   // the title. Shape: { [epKey]: sourceId }.
   SOURCE_FAILOVER_CACHE: "sourceFailoverCache",
+  // Per-source reliability stats learned from plays.
+  // Shape: { [sourceId]: { ok, fail, last } }.
+  SOURCE_STATS: "sourceStats",
   // Discord Rich Presence
   DISCORD_RPC_ENABLED: "discordRpcEnabled",
   DISCORD_RPC_SHOW_COVER: "discordRpcShowCover",
@@ -137,6 +140,33 @@ export const clearFailoverSource = (epKey) => {
     delete cache[epKey];
     storage.set(STORAGE_KEYS.SOURCE_FAILOVER_CACHE, cache);
   }
+};
+
+// ── Source reliability stats ────────────────────────────────────────────────
+// Learned from actual plays: a source counts as ok when it produced a stream
+// (m3u8 captured or video observed playing) and as failed when a play yielded
+// nothing after a timeout or the title was missing. Drives the reliability
+// dot in the source picker and the "switch to a better source" hint.
+export const getSourceStats = () =>
+  storage.get(STORAGE_KEYS.SOURCE_STATS) || {};
+
+export const recordSourceResult = (sourceId, ok) => {
+  if (!sourceId) return;
+  const stats = { ...getSourceStats() };
+  const prev = stats[sourceId] || {};
+  stats[sourceId] = {
+    ok: (prev.ok || 0) + (ok ? 1 : 0),
+    fail: (prev.fail || 0) + (ok ? 0 : 1),
+    last: Date.now(),
+  };
+  storage.set(STORAGE_KEYS.SOURCE_STATS, stats);
+};
+
+// Reliability 0..1, or null while there isn't enough data (<3 plays).
+export const sourceScore = (sourceId) => {
+  const s = getSourceStats()[sourceId];
+  const total = (s?.ok || 0) + (s?.fail || 0);
+  return total >= 3 ? s.ok / total : null;
 };
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

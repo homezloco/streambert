@@ -3343,6 +3343,18 @@ kbd {
     color: var(--text);
 }
 
+/* Source reliability dot: learned per-source success rate */
+.source-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.source-dot--good { background: var(--green, #46d369); }
+.source-dot--mid { background: var(--yellow, #e8b93f); }
+.source-dot--bad { background: var(--red, #e50914); }
+
 .source-dropdown__item--active {
     color: var(--text);
     background: var(--red-dim);

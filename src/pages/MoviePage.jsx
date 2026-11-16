@@ -57,6 +57,9 @@ import {
   getFailoverSource,
   setFailoverSource,
   clearFailoverSource,
+  getSourceStats,
+  recordSourceResult,
+  sourceScore,
 } from "../utils/storage";
 import {
   fetchMovieRating,
@@ -108,6 +111,11 @@ export default function MoviePage({
   const [playerSource, setPlayerSource] = useState(
     () => storage.get("playerSource") || NON_ANIME_DEFAULT_SOURCE,
   );
+  // Mirrors for effects/handlers with empty deps
+  const playerSourceRef = useRef(playerSource);
+  playerSourceRef.current = playerSource;
+  // Source reliability: true once this play produced a stream or video
+  const statsOkRef = useRef(false);
 
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
@@ -450,6 +458,7 @@ export default function MoviePage({
           // automatically and remember the choice for next time.
           const next = getNextNonAsyncSource(playerSource);
           if (next) {
+            recordSourceResult(playerSource, false);
             setFailoverSource(epKey, next);
             setM3u8Url(null);
             setInterceptedSubs([]);
@@ -480,9 +489,35 @@ export default function MoviePage({
     if (!window.electron) return;
     const handler = window.electron.onM3u8Found((url) => {
       setM3u8Url((prev) => (prev !== url ? url : prev));
+      // A real stream URL means the source delivered — count it once per play
+      if (!statsOkRef.current) {
+        statsOkRef.current = true;
+        recordSourceResult(playerSourceRef.current, true);
+      }
     });
     return () => window.electron.offM3u8Found(handler);
   }, []);
+
+  // m3u8Url resets to null on every play/source/item change → re-arm stats
+  useEffect(() => {
+    if (!m3u8Url) statsOkRef.current = false;
+  }, [m3u8Url]);
+
+  // A play that produced no stream and no resolved URL after 30s counts as a
+  // source failure (dead source, geo-block, broken embed).
+  useEffect(() => {
+    if (!playing) return;
+    const t = setTimeout(() => {
+      if (
+        !statsOkRef.current &&
+        !resolvedPlayerUrlRef.current &&
+        !nativeSwapRef.current
+      ) {
+        recordSourceResult(playerSourceRef.current, false);
+      }
+    }, 30000);
+    return () => clearTimeout(t);
+  }, [playing, playerSource]);
 
   // Native player: on the first real stream URL, replay it through the app's
   // own hls.js player and swap the webview to it (killing the embed). Runs at
@@ -692,6 +727,12 @@ export default function MoviePage({
           if (result && result.duration > 0) {
             const ct = result.currentTime;
 
+            // Video actually playing (covers progressive mp4 too) → source ok
+            if (ct > 2 && !statsOkRef.current) {
+              statsOkRef.current = true;
+              recordSourceResult(playerSource, true);
+            }
+
             // ── Resolution-change reset detection ──────────────────────────
             // Videasy resets to 0 on quality change. We only seek back if:
             // - ct is near zero (≤5s)
@@ -753,13 +794,32 @@ export default function MoviePage({
   }, [playing, progressKey, watchedThreshold, playerSource, progressViaFrames]);
 
   const handlePlay = useCallback(() => {
+    // If the saved source has proven unreliable, silently prefer the best
+    // proven one — the user can always override in the source menu.
+    const sel = sourceScore(playerSource);
+    if (sel !== null && sel < 0.35) {
+      let best = null;
+      let bestScore = 0;
+      for (const src of PLAYER_SOURCES) {
+        if (src.id === playerSource || src.async) continue;
+        const sc = sourceScore(src.id);
+        if (sc !== null && sc > bestScore) {
+          best = src.id;
+          bestScore = sc;
+        }
+      }
+      if (best && bestScore >= 0.6) {
+        setPlayerSource(best);
+        storage.set(STORAGE_KEYS.PLAYER_SOURCE, best);
+      }
+    }
     setM3u8Url(null);
     setInterceptedSubs([]);
     setNativePlayerUrl(null);
     nativeSwapRef.current = false;
     setPlaying(true);
     onHistory({ ...d, media_type: "movie" });
-  }, [d, onHistory]);
+  }, [d, onHistory, playerSource]);
 
   // Intercept fullscreen requests from embedded players (vidsrc / 2embed use
   // the native Fullscreen API which would otherwise fullscreen the entire app).
@@ -1295,42 +1355,53 @@ export default function MoviePage({
                 style={{ top: menuPos.top, left: menuPos.left }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {PLAYER_SOURCES.map((src) => (
-                  <button
-                    key={src.id}
-                    className={
-                      "source-dropdown__item" +
-                      (playerSource === src.id
-                        ? " source-dropdown__item--active"
-                        : "")
-                    }
-                    onClick={() => {
-                      setShowSourceMenu(false);
-                      if (src.id === playerSource) return;
-                      // Manual selection wins over auto-failover
-                      clearFailoverSource(`movie_${item.id}_${dubMode}`);
-                      setPlayerSource(src.id);
-                      storage.set(STORAGE_KEYS.PLAYER_SOURCE, src.id);
-                      setM3u8Url(null);
-                      setInterceptedSubs([]);
-                      setNativePlayerUrl(null);
-                      nativeSwapRef.current = false;
-                      resolvedPlayerUrlRef.current = null;
-                      setResolvedPlayerUrl(null);
-                      resolvingUrlRef.current = false;
-                      setResolvingUrl(false);
-                      setResolveError(null);
-                    }}
-                  >
-                    <span>{src.label}</span>
-                    {src.tag && (
-                      <span className="source-dropdown__tag">{src.tag}</span>
-                    )}
-                    {src.note && (
-                      <span className="source-dropdown__note">{src.note}</span>
-                    )}
-                  </button>
-                ))}
+                {PLAYER_SOURCES.map((src) => {
+                  const sc = sourceScore(src.id);
+                  return (
+                    <button
+                      key={src.id}
+                      className={
+                        "source-dropdown__item" +
+                        (playerSource === src.id
+                          ? " source-dropdown__item--active"
+                          : "")
+                      }
+                      onClick={() => {
+                        setShowSourceMenu(false);
+                        if (src.id === playerSource) return;
+                        // Manual selection wins over auto-failover
+                        clearFailoverSource(`movie_${item.id}_${dubMode}`);
+                        setPlayerSource(src.id);
+                        storage.set(STORAGE_KEYS.PLAYER_SOURCE, src.id);
+                        setM3u8Url(null);
+                        setInterceptedSubs([]);
+                        setNativePlayerUrl(null);
+                        nativeSwapRef.current = false;
+                        resolvedPlayerUrlRef.current = null;
+                        setResolvedPlayerUrl(null);
+                        resolvingUrlRef.current = false;
+                        setResolvingUrl(false);
+                        setResolveError(null);
+                      }}
+                    >
+                      <span>{src.label}</span>
+                      {src.tag && (
+                        <span className="source-dropdown__tag">{src.tag}</span>
+                      )}
+                      {src.note && (
+                        <span className="source-dropdown__note">
+                          {src.note}
+                        </span>
+                      )}
+                      {sc !== null && (
+                        <span
+                          className={`source-dot source-dot--${sc >= 0.7 ? "good" : sc >= 0.4 ? "mid" : "bad"}`}
+                          title={`${Math.round(sc * 100)}% of plays worked`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <button
