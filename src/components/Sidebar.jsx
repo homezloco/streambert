@@ -12,6 +12,7 @@ import {
   QuitIcon,
   BackIcon,
   HelpIcon,
+  AdultIcon,
 } from "./Icons";
 
 export default function Sidebar({
@@ -141,6 +142,12 @@ export default function Sidebar({
         icon={<DownloadsQueueIcon />}
         label="Downloads"
         badge={activeDownloads > 0 ? activeDownloads : null}
+      />
+      <SideBtn
+        active={page === "adult"}
+        onClick={() => onNavigate("adult")}
+        icon={<AdultIcon />}
+        label="18+"
       />
 
       <div className="sidebar-sep" />

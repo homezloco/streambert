@@ -42,6 +42,7 @@ import { useGamepadNav } from "./utils/useGamepadNav";
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
 const HomePage = lazy(() => import("./pages/HomePage"));
 const BrowsePage = lazy(() => import("./pages/BrowsePage"));
+const AdultPage = lazy(() => import("./pages/AdultPage"));
 const MoviePage = lazy(() => import("./pages/MoviePage"));
 const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
@@ -1092,6 +1093,7 @@ export default function App() {
                 initial={selected}
               />
             )}
+            {page === "adult" && <AdultPage />}
             {page === "movie" && selected && (
               <MoviePage
                 item={selected}

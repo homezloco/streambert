@@ -374,3 +374,27 @@ export const CastIcon = ({ size = 20 }) => (
     <path d="M16 15.503A5.041 5.041 0 1 0 16 5.42a5.041 5.041 0 0 0 0 10.083zm0 2.215c-6.703 0-11 3.699-11 5.5v3.363h22v-3.363c0-2.178-4.068-5.5-11-5.5z" />
   </svg>
 );
+
+export const AdultIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="2" y="5" width="20" height="14" rx="3" />
+    <text
+      x="12"
+      y="15.5"
+      textAnchor="middle"
+      fontSize="8"
+      fontWeight="bold"
+      fill="currentColor"
+      stroke="none"
+    >
+      18+
+    </text>
+  </svg>
+);
