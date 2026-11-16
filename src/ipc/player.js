@@ -1002,9 +1002,14 @@ function registerAudioDeviceRecovery() {
   ipc.on("audio-device-changed", () => setTimeout(recoverAllWebContents, 150));
 }
 
+function getStreamMeta(url) {
+  return streamMeta.get(url) || null;
+}
+
 module.exports = {
   register,
   registerAudioDeviceRecovery,
   rememberStreamMeta,
   hasStreamMeta,
+  getStreamMeta,
 };

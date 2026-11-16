@@ -512,6 +512,13 @@ let _currentVideoOrigin = null;
 let _currentVideoUA = null;
 let _currentVideoSubtitle = null;
 let _currentVideoStartTime = 0;
+// Optional per-URL header lookup (captured from the embed's own requests).
+// Lets multi-CDN streams replay the right Referer/Origin per playlist host —
+// the embed fetched every playlist itself, so its headers are on record.
+let _streamMetaLookup = null;
+function setStreamMetaLookup(fn) {
+  _streamMetaLookup = typeof fn === "function" ? fn : null;
+}
 
 function proxied(u) {
   return `/proxy?t=${_serverToken}&url=${encodeURIComponent(u)}`;
@@ -622,12 +629,27 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
   }
   if(window.Hls&&Hls.isSupported()){
     const hls=new Hls({autoStartLoad:false});
+    window.__hls=hls;
     hls.loadSource(src);hls.attachMedia(video);
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,()=>{
+      // separate-audio manifests: make sure one track is actually selected
+      const tracks=hls.audioTracks||[];
+      if(tracks.length&&hls.audioTrack===-1){
+        const def=tracks.findIndex(t=>t.default);
+        hls.audioTrack=def>=0?def:0;
+      }
+    });
     hls.on(Hls.Events.MANIFEST_PARSED,()=>{
       // start on the best quality (like ani-cli); ABR may still adapt downwards
       hls.startLevel=hls.levels.length-1;
       hls.startLoad(startTime>0?startTime:-1);
-      video.play().catch(()=>{});
+      video.play().catch(()=>{
+        // autoplay-with-sound blocked: start muted, unmute on first gesture
+        video.muted=true;
+        video.play().catch(()=>{});
+        const un=()=>{video.muted=false;document.removeEventListener('click',un);document.removeEventListener('keydown',un);};
+        document.addEventListener('click',un);document.addEventListener('keydown',un);
+      });
       if(hls.levels&&hls.levels.length>1)buildLevels(hls);
       else qsec.style.display='none';
     });
@@ -652,13 +674,20 @@ async function proxyRequest(target, req, res, hops = 0) {
     return;
   }
   const lib = targetUrl.protocol === "https:" ? https : http;
+  // Prefer the headers the embed itself sent for this exact URL (child
+  // playlists can sit on a different CDN needing its own Referer/Origin).
+  let meta = null;
+  try {
+    meta = _streamMetaLookup && _streamMetaLookup(target);
+  } catch {}
   const headers = {
-    "User-Agent": _currentVideoUA || USER_AGENT,
-    Referer: _currentVideoReferer,
+    "User-Agent": meta?.userAgent || _currentVideoUA || USER_AGENT,
+    Referer: meta?.referer || _currentVideoReferer,
     Accept: "*/*",
     "Accept-Encoding": "identity",
   };
-  if (_currentVideoOrigin) headers.Origin = _currentVideoOrigin;
+  const origin = meta?.origin || _currentVideoOrigin;
+  if (origin) headers.Origin = origin;
   if (req.headers["range"]) headers["Range"] = req.headers["range"];
 
   const proxyReq = lib.request(
@@ -735,21 +764,75 @@ async function proxyRequest(target, req, res, hops = 0) {
         return;
       }
 
-      const passHeaders = {};
-      for (const h of [
-        "content-type",
-        "content-length",
-        "content-range",
-        "accept-ranges",
-        "last-modified",
-        "etag",
-      ]) {
-        if (proxyRes.headers[h]) passHeaders[h] = proxyRes.headers[h];
-      }
-      passHeaders["Cache-Control"] = "no-store";
-      passHeaders["X-Content-Type-Options"] = "nosniff";
-      res.writeHead(status, passHeaders);
-      proxyRes.pipe(res);
+      // Peek at the first chunk: CDNs sometimes serve playlists as
+      // text/plain or octet-stream, which would pass through un-rewritten
+      // and break every resource they reference (e.g. audio tracks).
+      let sawData = false;
+      proxyRes.once("data", (first) => {
+        sawData = true;
+        if (
+          status === 200 &&
+          first
+            .subarray(0, 16)
+            .toString("utf8")
+            .trimStart()
+            .startsWith("#EXTM3U")
+        ) {
+          const chunks = [first];
+          let size = first.length;
+          proxyRes.on("data", (c) => {
+            size += c.length;
+            if (size <= MAX_TEXT_BYTES) chunks.push(c);
+          });
+          proxyRes.on("end", () => {
+            let out;
+            try {
+              if (size > MAX_TEXT_BYTES) throw new Error("oversize");
+              out = rewritePlaylist(
+                Buffer.concat(chunks).toString("utf8"),
+                target,
+              );
+            } catch {
+              res.writeHead(502);
+              res.end();
+              return;
+            }
+            res.writeHead(200, {
+              "Content-Type": "application/vnd.apple.mpegurl",
+              "Cache-Control": "no-store",
+              "X-Content-Type-Options": "nosniff",
+            });
+            res.end(out);
+          });
+          proxyRes.on("error", () => {
+            if (!res.headersSent) res.writeHead(502);
+            res.end();
+          });
+          return;
+        }
+        const passHeaders = {};
+        for (const h of [
+          "content-type",
+          "content-length",
+          "content-range",
+          "accept-ranges",
+          "last-modified",
+          "etag",
+        ]) {
+          if (proxyRes.headers[h]) passHeaders[h] = proxyRes.headers[h];
+        }
+        passHeaders["Cache-Control"] = "no-store";
+        passHeaders["X-Content-Type-Options"] = "nosniff";
+        res.writeHead(status, passHeaders);
+        res.write(first);
+        proxyRes.pipe(res);
+      });
+      proxyRes.once("end", () => {
+        if (!sawData && !res.headersSent) {
+          res.writeHead(status, { "Cache-Control": "no-store" });
+          res.end();
+        }
+      });
     },
   );
   proxyReq.on("error", () => {
@@ -1081,6 +1164,7 @@ function register() {
 module.exports = {
   register,
   setPlayerVideo,
+  setStreamMetaLookup,
   // exported for tests
   _internal: {
     deobfuscateBlob,

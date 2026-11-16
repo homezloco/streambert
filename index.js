@@ -556,6 +556,9 @@ function createWindow() {
       const playerSession = session.fromPartition("persist:player");
       const trailerSession = session.fromPartition("persist:trailer");
       setupSession(playerSession, trailerSession);
+      // The local player proxy can then replay the exact headers the embed
+      // used for each captured playlist URL (multi-CDN streams).
+      hianimeIpc.setStreamMetaLookup((u) => playerIpc.getStreamMeta(u));
     }
 
     // Track player webviews for cleanup on player-stopped
