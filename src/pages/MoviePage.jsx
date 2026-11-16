@@ -116,6 +116,8 @@ export default function MoviePage({
   playerSourceRef.current = playerSource;
   // Source reliability: true once this play produced a stream or video
   const statsOkRef = useRef(false);
+  // Guard: at most one stats-driven auto-switch per play
+  const autoSwitchedRef = useRef(false);
 
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
@@ -504,7 +506,8 @@ export default function MoviePage({
   }, [m3u8Url]);
 
   // A play that produced no stream and no resolved URL after 30s counts as a
-  // source failure (dead source, geo-block, broken embed).
+  // source failure — and auto-fails over to the best proven source (once per
+  // play, so a dead network can't cascade through every source).
   useEffect(() => {
     if (!playing) return;
     const t = setTimeout(() => {
@@ -513,11 +516,35 @@ export default function MoviePage({
         !resolvedPlayerUrlRef.current &&
         !nativeSwapRef.current
       ) {
-        recordSourceResult(playerSourceRef.current, false);
+        const dead = playerSourceRef.current;
+        recordSourceResult(dead, false);
+        if (!autoSwitchedRef.current) {
+          const sel = sourceScore(dead);
+          let best = null;
+          let bestScore = 0;
+          for (const src of PLAYER_SOURCES) {
+            if (src.id === dead || src.async) continue;
+            const sc = sourceScore(src.id);
+            if (sc !== null && sc > bestScore) {
+              best = src.id;
+              bestScore = sc;
+            }
+          }
+          if (best && bestScore >= 0.6 && (sel === null || bestScore > sel)) {
+            autoSwitchedRef.current = true;
+            setPlayerSource(best);
+            storage.set(STORAGE_KEYS.PLAYER_SOURCE, best);
+          }
+        }
       }
     }, 30000);
     return () => clearTimeout(t);
   }, [playing, playerSource]);
+
+  // Re-arm the auto-switch guard on each new play
+  useEffect(() => {
+    autoSwitchedRef.current = false;
+  }, [playing, item.id]);
 
   // Native player: on the first real stream URL, replay it through the app's
   // own hls.js player and swap the webview to it (killing the embed). Runs at
