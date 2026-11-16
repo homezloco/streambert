@@ -579,9 +579,20 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
 #menu .sec:first-child{margin-top:0}
 #menu button{display:block;width:100%;text-align:left;background:none;border:none;color:#eee;padding:5px 8px;border-radius:4px;cursor:pointer;font:inherit}
 #menu button:hover{background:rgba(255,255,255,.1)}
-#menu button.on{color:#ff4d4d;font-weight:600}</style>
+#menu button.on{color:#ff4d4d;font-weight:600}
+/* timeline strip with hover preview — native controls can't be extended,
+   so this sits just above the built-in control bar */
+#seekbar{position:absolute;left:0;right:0;bottom:46px;height:16px;z-index:15;cursor:pointer}
+#seekbar .rail{position:absolute;top:6px;left:0;right:0;height:4px;background:rgba(255,255,255,.22);transition:height .1s,top .1s}
+#seekbar:hover .rail{top:4px;height:8px}
+#seekbuf{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.35)}
+#seekfill{position:absolute;left:0;top:0;bottom:0;width:0;background:#ff4d4d}
+#thumb{position:absolute;bottom:20px;transform:translateX(-50%);background:#000;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px;display:none;pointer-events:none;z-index:25}
+#thumb canvas{display:block;width:160px;height:90px;background:#111}
+#ttime{text-align:center;font:12px system-ui,sans-serif;color:#fff;padding-top:3px}</style>
 </head><body>
 <video id="v" controls playsinline autoplay>${track}</video>
+<div id="seekbar"><div class="rail"><div id="seekbuf"></div><div id="seekfill"></div></div><div id="thumb"><canvas id="tc" width="160" height="90"></canvas><div id="ttime"></div></div></div>
 <button id="gear" title="Quality & speed">&#9881;</button>
 <div id="menu" hidden>
   <div class="sec" id="qsec">Quality</div>
@@ -599,6 +610,111 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   const speedsBox=document.getElementById('speeds');
   const src=${jsonForScript(isFile ? `/file?t=${_serverToken}` : proxied(videoUrl))};
   const startTime=${start};
+  const isFile=${isFile ? "true" : "false"};
+  // ── Timeline strip: progress fill, buffered range, hover thumbnails ──
+  // A hidden second video element renders frames for the preview bubble.
+  const seekbar=document.getElementById('seekbar');
+  const seekfill=document.getElementById('seekfill');
+  const seekbuf=document.getElementById('seekbuf');
+  const thumb=document.getElementById('thumb');
+  const tc=document.getElementById('tc');
+  const ttime=document.getElementById('ttime');
+  const tctx=tc.getContext('2d');
+  let pv=document.createElement('video');
+  pv.muted=true;pv.preload='auto';
+  const thumbCache=new Map();
+  let pvHls=null,hoverT=null,seekTimer=null,grabBusy=false,scrubbing=false;
+  function fmtT(t){
+    if(!isFinite(t)||t<0)t=0;
+    const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=Math.floor(t%60);
+    return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(s).padStart(2,'0');
+  }
+  video.addEventListener('timeupdate',()=>{
+    const d=video.duration;
+    if(isFinite(d)&&d>0)seekfill.style.width=(video.currentTime/d*100)+'%';
+  });
+  video.addEventListener('progress',()=>{
+    try{
+      const b=video.buffered,d=video.duration;
+      if(b.length&&isFinite(d)&&d>0)seekbuf.style.width=(b.end(b.length-1)/d*100)+'%';
+    }catch(e){}
+  });
+  (function initPreview(){
+    if(isFile){pv.src=src;}
+    else if(window.Hls&&Hls.isSupported()){
+      // tiny buffers: preview seeks shouldn't pull more of the stream
+      pvHls=new Hls({maxBufferLength:2,maxMaxBufferLength:4});
+      pvHls.loadSource(src);pvHls.attachMedia(pv);
+    }else if(pv.canPlayType('application/vnd.apple.mpegurl')){pv.src=src;}
+    else{pv=null;}
+  })();
+  function grabFrame(t){
+    if(!pv||grabBusy)return;
+    grabBusy=true;
+    let done=false;
+    const finish=()=>{
+      if(done)return;done=true;
+      clearTimeout(giveUp);
+      pv.removeEventListener('seeked',onSeeked);
+      try{
+        tctx.drawImage(pv,0,0,tc.width,tc.height);
+        // don't poison the cache with a blank frame
+        const px=tctx.getImageData(80,45,1,1).data;
+        if(px[0]||px[1]||px[2]){
+          thumbCache.set(t,tc.toDataURL('image/jpeg',0.6));
+          if(thumbCache.size>300)thumbCache.delete(thumbCache.keys().next().value);
+        }
+      }catch(e){}
+      grabBusy=false;
+      if(hoverT!==null&&hoverT!==t)queueGrab(hoverT);
+    };
+    const onSeeked=()=>{
+      // 'seeked' fires when data is buffered at the target; give the
+      // decoder a beat to present the new frame before drawing
+      if(pv.readyState>=2){setTimeout(finish,120);return;}
+      const iv=setInterval(()=>{
+        if(pv.readyState>=2){clearInterval(iv);setTimeout(finish,120);}
+      },60);
+      setTimeout(()=>clearInterval(iv),4000);
+    };
+    const giveUp=setTimeout(finish,6000);
+    pv.addEventListener('seeked',onSeeked);
+    try{pv.currentTime=t;}catch(e){finish();}
+  }
+  function queueGrab(t){
+    if(seekTimer)clearTimeout(seekTimer);
+    seekTimer=setTimeout(()=>grabFrame(t),180);
+  }
+  function barTime(e){
+    const r=seekbar.getBoundingClientRect();
+    const f=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+    return {t:isFinite(video.duration)?f*video.duration:NaN,
+            x:Math.min(r.width-86,Math.max(86,e.clientX-r.left))};
+  }
+  seekbar.addEventListener('mousemove',(e)=>{
+    const {t,x}=barTime(e);
+    if(scrubbing&&isFinite(t))video.currentTime=t;
+    if(!isFinite(t))return;
+    thumb.style.display='block';thumb.style.left=x+'px';
+    ttime.textContent=fmtT(t);
+    const b=Math.round(t);hoverT=b;
+    const hit=thumbCache.get(b);
+    if(hit){
+      const img=new Image();
+      img.onload=()=>tctx.drawImage(img,0,0,tc.width,tc.height);
+      img.src=hit;
+    }else if(pv){queueGrab(b);}
+  });
+  seekbar.addEventListener('mouseleave',()=>{
+    thumb.style.display='none';hoverT=null;scrubbing=false;
+    if(seekTimer)clearTimeout(seekTimer);
+  });
+  seekbar.addEventListener('mousedown',(e)=>{
+    const {t}=barTime(e);
+    if(isFinite(t)){scrubbing=true;video.currentTime=t;}
+    e.preventDefault();
+  });
+  document.addEventListener('mouseup',()=>{scrubbing=false;});
   gear.addEventListener('click',(e)=>{e.stopPropagation();menu.hidden=!menu.hidden;});
   menu.addEventListener('click',(e)=>e.stopPropagation());
   document.addEventListener('click',()=>{menu.hidden=true;});
@@ -634,7 +750,6 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
     paint();
     qsec.style.display='';
   }
-  const isFile=${isFile ? "true" : "false"};
   if(isFile){
     // local file served by /file — mp4/mkv play natively, no hls.js needed
     qsec.style.display='none';
