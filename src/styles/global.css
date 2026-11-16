@@ -512,6 +512,31 @@ select option {
     align-self: center;
 }
 
+/* Site tab favorites + filter */
+.site-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.fav-star {
+    font-size: 11px;
+    color: var(--text3);
+    opacity: 0.5;
+    line-height: 1;
+}
+.fav-star:hover {
+    opacity: 1;
+}
+.fav-star--on {
+    color: #ffb400;
+    opacity: 1;
+}
+.site-filter {
+    width: 140px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
 /* Webview back/forward/reload controls */
 .webview-nav {
     display: flex;

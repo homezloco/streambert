@@ -155,6 +155,48 @@ const fmtViews = (n) =>
       ? `${Math.round(n / 1e3)}K`
       : String(n ?? 0);
 
+// Site tab row shared by Sites/Images/Creators modes: star a site to pin
+// it to the front; the filter box narrows the row by name.
+function SiteTabs({ list, selected, onSelect, favs, onToggleFav, filter, onFilter }) {
+  const q = filter.trim().toLowerCase();
+  const shown = q
+    ? list.filter((s) => s.name.toLowerCase().includes(q))
+    : [...list].sort(
+        (a, b) => (favs.includes(b.id) ? 1 : 0) - (favs.includes(a.id) ? 1 : 0),
+      );
+  return (
+    <>
+      <input
+        className="adult-search site-filter"
+        placeholder="Filter sites…"
+        value={filter}
+        onChange={(e) => onFilter(e.target.value)}
+      />
+      <div className="browse-tabs site-tabs">
+        {shown.map((s) => (
+          <button
+            key={s.id}
+            className={`browse-tab site-tab${selected === s.id ? " browse-tab--active" : ""}`}
+            onClick={() => onSelect(s.id)}
+          >
+            {s.name}
+            <span
+              className={`fav-star${favs.includes(s.id) ? " fav-star--on" : ""}`}
+              title={favs.includes(s.id) ? "Unpin" : "Pin to front"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFav(s.id);
+              }}
+            >
+              ★
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function AdultCard({ v, onPlay }) {
   const thumbs =
     v.thumbs?.length > 0
@@ -231,6 +273,15 @@ export default function AdultPage() {
     storage.set("adultCreatorSite", v);
     _setCreatorSite(v);
   };
+  const [favs, setFavs] = useState(() => storage.get("adultSiteFavs") || []);
+  const toggleFav = (id) => {
+    const next = favs.includes(id)
+      ? favs.filter((f) => f !== id)
+      : [...favs, id];
+    setFavs(next);
+    storage.set("adultSiteFavs", next);
+  };
+  const [tabFilter, setTabFilter] = useState("");
   const webviewRef = useRef(null);
   const [playing, _setPlaying] = useState(null);
   const [recents, setRecents] = useState(
@@ -651,43 +702,37 @@ export default function AdultPage() {
           </>
         )}
         {mode === "sites" && (
-          <div className="browse-tabs site-tabs">
-            {SITES.map((s) => (
-              <button
-                key={s.id}
-                className={`browse-tab${site === s.id ? " browse-tab--active" : ""}`}
-                onClick={() => setSite(s.id)}
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
+          <SiteTabs
+            list={SITES}
+            selected={site}
+            onSelect={setSite}
+            favs={favs}
+            onToggleFav={toggleFav}
+            filter={tabFilter}
+            onFilter={setTabFilter}
+          />
         )}
         {mode === "images" && (
-          <div className="browse-tabs site-tabs">
-            {IMAGE_SITES.map((s) => (
-              <button
-                key={s.id}
-                className={`browse-tab${imgSite === s.id ? " browse-tab--active" : ""}`}
-                onClick={() => setImgSite(s.id)}
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
+          <SiteTabs
+            list={IMAGE_SITES}
+            selected={imgSite}
+            onSelect={setImgSite}
+            favs={favs}
+            onToggleFav={toggleFav}
+            filter={tabFilter}
+            onFilter={setTabFilter}
+          />
         )}
         {mode === "creators" && (
-          <div className="browse-tabs site-tabs">
-            {CREATOR_SITES.map((s) => (
-              <button
-                key={s.id}
-                className={`browse-tab${creatorSite === s.id ? " browse-tab--active" : ""}`}
-                onClick={() => setCreatorSite(s.id)}
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
+          <SiteTabs
+            list={CREATOR_SITES}
+            selected={creatorSite}
+            onSelect={setCreatorSite}
+            favs={favs}
+            onToggleFav={toggleFav}
+            filter={tabFilter}
+            onFilter={setTabFilter}
+          />
         )}
       </div>
 
