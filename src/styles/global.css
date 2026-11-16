@@ -94,6 +94,16 @@ body,
     background: var(--red);
 }
 
+/* Native <select> dropdown lists render with the OS light theme — pin
+   them dark so the light text stays readable */
+select {
+    color-scheme: dark;
+}
+select option {
+    background: #161616;
+    color: #f0f0f0;
+}
+
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 .sidebar {
     position: fixed;
