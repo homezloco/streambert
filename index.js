@@ -365,7 +365,9 @@ const ADULT_NAV_HOSTS = [
   "elitebabes.com", "imagepost.com", "eroticbeauties.net",
   "kindgirls.com", "vjav.com", "youav.com", "jav.guru",
   "netflav.com", "sextop1.net", "upornia.com", "madou.club",
-  "91porny.com",
+  "91porny.com", "fansly.com", "xxxfollow.com", "coomer.st",
+  "kemono.cr", "fapopedia.net", "influencersgonewild.com",
+  "gotanynudes.com", "erothots.co", "prothots.com", "camwhores.tv",
 ];
 // Noodlemagazine is an aggregator — outbound links are the content, so it
 // gets overlay-killing but not the navigation lock or off-domain click block.

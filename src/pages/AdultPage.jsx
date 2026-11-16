@@ -55,6 +55,30 @@ const IMAGE_SITES = [
   { id: "kindgirls", name: "KindGirls", url: "https://www.kindgirls.com" },
 ];
 
+// Creator-content sites: legit platforms (Fansly, XXXFollow) plus
+// OF/Patreon leak aggregators (Coomer, Kemono, …) — same legal grey as
+// the movie sources. Leak domains rotate; dead tabs get swapped out.
+const CREATOR_SITES = [
+  { id: "fansly", name: "Fansly", url: "https://fansly.com" },
+  { id: "xxxfollow", name: "XXXFollow", url: "https://xxxfollow.com" },
+  { id: "coomer", name: "Coomer", url: "https://coomer.st" },
+  { id: "kemono", name: "Kemono", url: "https://kemono.cr" },
+  { id: "fapopedia", name: "Fapopedia", url: "https://fapopedia.net" },
+  {
+    id: "influencersgonewild",
+    name: "InfluGW",
+    url: "https://influencersgonewild.com",
+  },
+  { id: "gotanynudes", name: "GotNudes", url: "https://gotanynudes.com" },
+  { id: "erothots", name: "EroThots", url: "https://erothots.co" },
+  { id: "prothots", name: "ProThots", url: "https://prothots.com" },
+  {
+    id: "camwhores",
+    name: "CamWhores",
+    url: "https://www.camwhores.tv",
+  },
+];
+
 // Eporner's free JSON catalog — no key. Drives the categorized browser;
 // playback uses the per-video embed URL inside the hardened webview.
 const API = "https://www.eporner.com/api/v2/video/search/";
@@ -178,9 +202,10 @@ export default function AdultPage() {
   const [confirmed, setConfirmed] = useState(
     () => storage.get("adultConfirmed") === true,
   );
-  const [mode, setMode] = useState("browse"); // browse | sites | images
+  const [mode, setMode] = useState("browse"); // browse | sites | images | creators
   const [site, setSite] = useState(SITES[0].id);
   const [imgSite, setImgSite] = useState(IMAGE_SITES[0].id);
+  const [creatorSite, setCreatorSite] = useState(CREATOR_SITES[0].id);
   const [playing, setPlaying] = useState(null);
 
   // browse state
@@ -359,7 +384,9 @@ export default function AdultPage() {
   const current =
     mode === "images"
       ? IMAGE_SITES.find((s) => s.id === imgSite) || IMAGE_SITES[0]
-      : SITES.find((s) => s.id === site) || SITES[0];
+      : mode === "creators"
+        ? CREATOR_SITES.find((s) => s.id === creatorSite) || CREATOR_SITES[0]
+        : SITES.find((s) => s.id === site) || SITES[0];
 
   return (
     <div className="adult-page">
@@ -385,6 +412,12 @@ export default function AdultPage() {
             onClick={() => setMode("images")}
           >
             Images
+          </button>
+          <button
+            className={`browse-tab${mode === "creators" ? " browse-tab--active" : ""}`}
+            onClick={() => setMode("creators")}
+          >
+            Creators
           </button>
         </div>
         {mode === "browse" && (
@@ -456,9 +489,22 @@ export default function AdultPage() {
             ))}
           </div>
         )}
+        {mode === "creators" && (
+          <div className="browse-tabs site-tabs">
+            {CREATOR_SITES.map((s) => (
+              <button
+                key={s.id}
+                className={`browse-tab${creatorSite === s.id ? " browse-tab--active" : ""}`}
+                onClick={() => setCreatorSite(s.id)}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {mode === "sites" || mode === "images" ? (
+      {mode !== "browse" ? (
         <webview
           key={`${mode}-${current.id}`}
           src={current.url}
