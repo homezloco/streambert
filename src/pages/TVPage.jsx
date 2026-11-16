@@ -2731,7 +2731,7 @@ export default function TVPage({
           season={selectedSeason}
           episode={selectedEp?.episode_number}
           posterPath={d.poster_path}
-          tmdbId={item.id}
+          tmdbId={details?.moviedb_id || item.id}
         />
       )}
     </div>

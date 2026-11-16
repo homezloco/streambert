@@ -133,10 +133,12 @@ function register({ getDownloads, saveDownloads }) {
         try {
           const params = new URLSearchParams({
             api_key: subdlApiKey,
-            tmdb_id: String(tmdbId),
             type: mediaType === "tv" ? "tv" : "movie",
             subs_per_page: "30",
           });
+          // SubDL accepts either id namespace; keyless mode may pass imdb ids.
+          if (/^tt\d+$/.test(String(tmdbId))) params.set("imdb_id", String(tmdbId));
+          else params.set("tmdb_id", String(tmdbId));
           if (mediaType === "tv" && season != null)
             params.set("season_number", String(season));
           if (mediaType === "tv" && episode != null)

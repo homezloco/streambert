@@ -17,7 +17,12 @@ import {
   ACCENT_PRESETS,
 } from "./utils/appearance";
 import { collectBackupData } from "./utils/backup";
-import { tmdbFetch, setApiErrorHandlers, imgUrl } from "./utils/api";
+import {
+  tmdbFetch,
+  setApiErrorHandlers,
+  imgUrl,
+  CINEMETA_KEY,
+} from "./utils/api";
 import { clearAppCaches } from "./utils/storage";
 import {
   readDiscordRpcSettings,
@@ -385,7 +390,8 @@ export default function App() {
 
   // ── Validate stored API key on startup ───────────────────────────────────
   useEffect(() => {
-    if (!apiKey) {
+    if (!apiKey || apiKey === CINEMETA_KEY) {
+      // No key, or keyless (Cinemeta) mode — nothing to validate
       setApiKeyStatus("ok");
       return;
     }
@@ -987,7 +993,12 @@ export default function App() {
 
   if (!apiKeyLoaded) return null; // wait for secure storage to resolve
   if (!apiKey && !skipped)
-    return <SetupScreen onSave={saveApiKey} onSkip={() => setSkipped(true)} />;
+    return (
+      <SetupScreen
+        onSave={saveApiKey}
+        onSkip={() => saveApiKey(CINEMETA_KEY)}
+      />
+    );
 
   const hasCustomTitlebar = platform === "win32" || platform === "linux";
 
@@ -1025,8 +1036,8 @@ export default function App() {
           {apiKeyStatus === "unreachable" && (
             <div className="api-status-banner api-status-warn">
               <span>
-                ⚠ Cannot reach TMDB, check your internet connection. Content may
-                not load.
+                ⚠ Cannot reach the metadata service, check your internet
+                connection. Content may not load.
               </span>
               <button
                 className="api-status-btn"

@@ -7,7 +7,7 @@ import {
   isElectron,
   clearAppCaches,
 } from "../utils/storage";
-import { clearTmdbCache } from "../utils/api";
+import { clearTmdbCache, CINEMETA_KEY } from "../utils/api";
 import {
   ACCENT_PRESETS,
   applyAccentColor,
@@ -3682,7 +3682,11 @@ export default function SettingsPage({
                   border: "1px solid var(--border)",
                 }}
               >
-                {apiKey ? apiKey.slice(0, 8) + "••••••••••••••••" : "(not set)"}
+                {apiKey === CINEMETA_KEY
+                  ? "Cinemeta (no API key)"
+                  : apiKey
+                    ? apiKey.slice(0, 8) + "••••••••••••••••"
+                    : "(not set)"}
               </code>
               <button className="btn btn-ghost" onClick={onChangeApiKey}>
                 Change API Token

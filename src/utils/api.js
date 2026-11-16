@@ -1,5 +1,12 @@
+import { cinemetaFetch, resolveTmdbId } from "./cinemeta";
+
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMG_BASE = "https://image.tmdb.org/t/p";
+
+// Sentinel apiKey value: metadata is served by Cinemeta instead of TMDB.
+// Stored like a real key (secureStorage) so the no-key choice persists.
+export const CINEMETA_KEY = "cinemeta-keyless";
+export const isKeylessMode = (apiKey) => apiKey === CINEMETA_KEY;
 
 // ── TMDB metadata language ────────────────────────────────────────────────────
 // Read lazily from localStorage so it always reflects the current setting.
@@ -20,8 +27,25 @@ function withLanguage(path) {
   return `${path}${sep}language=${lang}`;
 }
 
-export const imgUrl = (path, size = "w500") =>
-  path ? `${IMG_BASE}/${size}${path}` : null;
+export const imgUrl = (path, size = "w500") => {
+  if (!path) return null;
+  // Cinemeta/metahub image URLs are absolute. The tier is part of the URL
+  // (/poster/small|medium|large/) — upgrade it for large render targets.
+  if (/^https?:\/\//.test(path)) {
+    const want =
+      size === "original" || /^w(7[0-9]{2}|[89][0-9]{2}|\d{4,})$/.test(size)
+        ? "large"
+        : size === "w500"
+          ? "medium"
+          : null;
+    if (!want) return path;
+    return path.replace(
+      /\/(poster|background)\/(small|medium|large)\//,
+      `/$1/${want}/`,
+    );
+  }
+  return `${IMG_BASE}/${size}${path}`;
+};
 
 // Global auth-error callback, registered by App on mount
 let _onAuthError = null;
@@ -70,6 +94,30 @@ function _releaseSlot() {
 }
 
 export const tmdbFetch = async (path, apiKey) => {
+  // ── Keyless mode: translate TMDB paths to Cinemeta ──────────────────────
+  if (isKeylessMode(apiKey)) {
+    const cacheKey = `cm|${path}`;
+    const cached = _tmdbCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) return cached.data;
+    await _acquireSlot();
+    let data;
+    try {
+      data = await cinemetaFetch(path);
+    } catch (e) {
+      _releaseSlot();
+      // Unsupported endpoints degrade silently (callers handle it); real
+      // network failures still surface the "unreachable" banner.
+      if (!e.cinemetaUnsupported) _onUnreachable?.();
+      throw e;
+    }
+    _releaseSlot();
+    _tmdbCache.set(cacheKey, {
+      data,
+      expiresAt: Date.now() + TMDB_CACHE_TTL,
+    });
+    return data;
+  }
+
   const localizedPath = withLanguage(path);
   const cacheKey = `${apiKey}|${localizedPath}`;
   const cached = _tmdbCache.get(cacheKey);
@@ -369,6 +417,8 @@ const _imdbPending = new Map(); // "movie:123" -> Promise<string>
  * @returns {Promise<string>} e.g. "tt0133093" (rejects if TMDB has none)
  */
 export function fetchImdbId(type, tmdbId, apiKey) {
+  // In keyless mode item ids already ARE IMDb ids — resolve instantly.
+  if (/^tt\d+$/.test(String(tmdbId))) return Promise.resolve(String(tmdbId));
   const kind = type === "movie" ? "movie" : "tv";
   const key = `${kind}:${tmdbId}`;
   if (_imdbCache.has(key)) return Promise.resolve(_imdbCache.get(key));
@@ -391,6 +441,18 @@ export function fetchImdbId(type, tmdbId, apiKey) {
 // Which ID a source expects: "tmdb" (default) | "imdb" | "kinopoisk"
 export const sourceIdType = (sourceId) =>
   PLAYER_SOURCES.find((s) => s.id === sourceId)?.idType ?? "tmdb";
+
+/**
+ * Resolve the numeric TMDB id for a title whose id may be an IMDb id.
+ * Numeric ids pass through; IMDb ids are resolved via the Cinemeta meta
+ * endpoint (moviedb_id). Used by useSourceId in keyless mode, where item
+ * ids are IMDb ids but most player sources still expect TMDB ids.
+ */
+export function fetchTmdbNumericId(type, anyId) {
+  const s = String(anyId);
+  if (/^\d+$/.test(s)) return Promise.resolve(Number(s));
+  return resolveTmdbId(type === "movie" ? "movie" : "series", s);
+}
 
 export const sourceNeedsKinopoisk = (sourceId) =>
   sourceIdType(sourceId) === "kinopoisk";
@@ -432,17 +494,23 @@ export function fetchKinopoiskId(type, tmdbId, apiKey) {
   if (_kpPending.has(key)) return _kpPending.get(key);
 
   const p = (async () => {
-    if (!/^\d+$/.test(String(tmdbId))) {
-      throw new Error(`Invalid TMDB id ${tmdbId}`);
-    }
-    const tmdbProp = kind === "movie" ? "P4947" : "P4983";
-    let kp = await _wikidataKinopoisk(tmdbProp, String(tmdbId));
-    if (!kp) {
-      // Fallback: some Wikidata items only carry the IMDb ID
-      const imdb = await fetchImdbId(kind, tmdbId, apiKey).catch(() => null);
-      if (imdb && /^tt\d+$/.test(imdb)) {
-        kp = await _wikidataKinopoisk("P345", imdb);
+    const idStr = String(tmdbId);
+    let kp = null;
+    if (/^tt\d+$/.test(idStr)) {
+      // Keyless mode: item ids are IMDb ids — query Wikidata by IMDb directly.
+      kp = await _wikidataKinopoisk("P345", idStr);
+    } else if (/^\d+$/.test(idStr)) {
+      const tmdbProp = kind === "movie" ? "P4947" : "P4983";
+      kp = await _wikidataKinopoisk(tmdbProp, idStr);
+      if (!kp) {
+        // Fallback: some Wikidata items only carry the IMDb ID
+        const imdb = await fetchImdbId(kind, idStr, apiKey).catch(() => null);
+        if (imdb && /^tt\d+$/.test(imdb)) {
+          kp = await _wikidataKinopoisk("P345", imdb);
+        }
       }
+    } else {
+      throw new Error(`Invalid TMDB id ${tmdbId}`);
     }
     if (!kp) throw new Error(`No Kinopoisk ID found for TMDB ${kind} ${tmdbId}`);
     _kpCache.set(key, kp);

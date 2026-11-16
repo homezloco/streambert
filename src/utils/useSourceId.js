@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { fetchImdbId, fetchKinopoiskId, sourceIdType } from "./api";
+import {
+  fetchImdbId,
+  fetchKinopoiskId,
+  fetchTmdbNumericId,
+  sourceIdType,
+} from "./api";
 
 const LABELS = { imdb: "IMDb ID", kinopoisk: "Kinopoisk ID" };
 
@@ -13,17 +18,28 @@ const LABELS = { imdb: "IMDb ID", kinopoisk: "Kinopoisk ID" };
  */
 export function useSourceId(sourceId, type, tmdbId, apiKey) {
   const idType = sourceIdType(sourceId);
-  const needsConversion = idType === "imdb" || idType === "kinopoisk";
+  // In keyless mode item ids are IMDb ids, so even "tmdb" sources need a
+  // conversion step (imdb → moviedb_id via the Cinemeta meta endpoint).
+  const isImdbId = /^tt\d+$/.test(String(tmdbId));
+  const needsConversion =
+    idType === "imdb" || idType === "kinopoisk" || (idType === "tmdb" && isImdbId);
   const [state, setState] = useState({ key: null, id: null, error: null });
   const key = needsConversion ? `${idType}:${type}:${tmdbId}` : null;
 
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
-    const resolve = idType === "kinopoisk" ? fetchKinopoiskId : fetchImdbId;
+    const resolve =
+      idType === "kinopoisk"
+        ? fetchKinopoiskId
+        : idType === "imdb"
+          ? fetchImdbId
+          : fetchTmdbNumericId;
     resolve(type, tmdbId, apiKey)
       .then((id) => !cancelled && setState({ key, id, error: null }))
-      .catch((e) => !cancelled && setState({ key, id: null, error: e.message }));
+      .catch((e) =>
+        !cancelled && setState({ key, id: null, error: e.message }),
+      );
     return () => {
       cancelled = true;
     };

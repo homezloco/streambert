@@ -1408,7 +1408,7 @@ export default function MoviePage({
           mediaId={item.id}
           mediaType="movie"
           posterPath={d.poster_path}
-          tmdbId={item.id}
+          tmdbId={details?.moviedb_id || item.id}
         />
       )}
     </div>
