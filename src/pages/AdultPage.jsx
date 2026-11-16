@@ -197,6 +197,49 @@ export default function AdultPage() {
       });
   }, [mode, cat, order, query, gay, page]);
 
+  // ── Downloading: reuse the movie downloader once a stream URL is captured ──
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [downloader, setDownloader] = useState(null);
+  const [dlState, setDlState] = useState(null); // null | "starting" | "started" | "error"
+
+  useEffect(() => {
+    if (!playing) return;
+    setStreamUrl(null);
+    setDlState(null);
+    if (!window.electron) return;
+    const handler = window.electron.onM3u8Found?.((url) => {
+      if (!url.startsWith("http://127.0.0.1")) setStreamUrl(url);
+    });
+    const folder = storage.get("downloaderFolder");
+    if (folder && window.electron.checkDownloader) {
+      window.electron
+        .checkDownloader(folder)
+        .then((r) => setDownloader(r))
+        .catch(() => {});
+    }
+    return () => {
+      if (handler) window.electron.offM3u8Found?.(handler);
+    };
+  }, [playing]);
+
+  const startDownload = async () => {
+    const downloadPath = storage.get("downloadPath");
+    if (!downloader?.token || !downloadPath || !streamUrl) return;
+    setDlState("starting");
+    const name = (playing?.title || "video")
+      .replace(/[\\/:*?"<>|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const result = await window.electron.runDownload({
+      token: downloader.token,
+      m3u8Url: streamUrl,
+      name,
+      downloadPath,
+    });
+    setDlState(result?.ok ? "started" : "error");
+  };
+
   // Same cleanup as the player pages: release tracked player webContents.
   useEffect(() => {
     return () => {
@@ -240,6 +283,24 @@ export default function AdultPage() {
             ← Back
           </button>
           <span className="adult-playing-title">{playing.title}</span>
+          {downloader?.token && (
+            <button
+              className="btn btn-secondary dl-btn--sm"
+              disabled={!streamUrl || dlState === "starting"}
+              onClick={startDownload}
+              title={
+                streamUrl
+                  ? "Download the captured stream"
+                  : "Waiting for the stream to load…"
+              }
+            >
+              {dlState === "started"
+                ? "✓ Downloading"
+                : dlState === "error"
+                  ? "Download failed"
+                  : "⬇ Download"}
+            </button>
+          )}
         </div>
         <webview
           key={playing.id}
