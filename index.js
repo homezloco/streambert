@@ -359,7 +359,8 @@ const ADULT_NAV_HOSTS = [
   "eporner.com", "xvideos.com", "pornhub.com", "redtube.com",
   "chaturbate.com", "xnxx.com", "hqporner.com", "hanime.tv",
   "rule34video.com", "njav.tv", "javmost.cx", "javtiful.com",
-  "javhd.today", "javenglish.cc",
+  "javhd.today", "javenglish.cc", "bdsmstreak.com", "hog.tv",
+  "punishbang.com", "spankingtube.com", "bdsm.one",
 ];
 // Noodlemagazine is an aggregator — outbound links are the content, so it
 // gets overlay-killing but not the navigation lock or off-domain click block.

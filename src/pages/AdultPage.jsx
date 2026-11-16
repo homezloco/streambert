@@ -17,6 +17,15 @@ const SITES = [
   { id: "javhd", name: "JavHD", url: "https://javhd.today" },
   { id: "javenglish", name: "JavEng", url: "https://javenglish.cc" },
   { id: "javhdsub", name: "JavHD-Sub", url: "https://javhd.today/jav-sub/" },
+  { id: "bdsmstreak", name: "BDSMStreak", url: "https://bdsmstreak.com" },
+  { id: "hogtv", name: "HogTV", url: "https://hog.tv" },
+  { id: "punishbang", name: "PunishBang", url: "https://punishbang.com" },
+  {
+    id: "spankingtube",
+    name: "SpankTube",
+    url: "https://www.spankingtube.com",
+  },
+  { id: "bdsmone", name: "BDSM.one", url: "https://bdsm.one" },
   {
     id: "noodlemagazine",
     name: "Noodle",
