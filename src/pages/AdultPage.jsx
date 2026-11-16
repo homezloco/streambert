@@ -23,6 +23,15 @@ const SITES = [
     url: "https://www.spankingtube.com",
   },
   { id: "bdsmone", name: "BDSM.one", url: "https://bdsm.one" },
+  {
+    id: "noodlemagazine",
+    name: "Noodle",
+    url: "https://noodlemagazine.com",
+  },
+  { id: "chaturbate", name: "Chaturbate", url: "https://chaturbate.com" },
+];
+
+const IMAGE_SITES = [
   { id: "imagefap", name: "ImageFap", url: "https://www.imagefap.com" },
   { id: "pornpics", name: "PornPics", url: "https://www.pornpics.com" },
   { id: "erome", name: "Erome", url: "https://erome.com" },
@@ -36,12 +45,6 @@ const SITES = [
     url: "https://eroticbeauties.net",
   },
   { id: "kindgirls", name: "KindGirls", url: "https://www.kindgirls.com" },
-  {
-    id: "noodlemagazine",
-    name: "Noodle",
-    url: "https://noodlemagazine.com",
-  },
-  { id: "chaturbate", name: "Chaturbate", url: "https://chaturbate.com" },
 ];
 
 // Eporner's free JSON catalog — no key. Drives the categorized browser;
@@ -167,8 +170,9 @@ export default function AdultPage() {
   const [confirmed, setConfirmed] = useState(
     () => storage.get("adultConfirmed") === true,
   );
-  const [mode, setMode] = useState("browse"); // browse | sites
+  const [mode, setMode] = useState("browse"); // browse | sites | images
   const [site, setSite] = useState(SITES[0].id);
+  const [imgSite, setImgSite] = useState(IMAGE_SITES[0].id);
   const [playing, setPlaying] = useState(null);
 
   // browse state
@@ -344,7 +348,10 @@ export default function AdultPage() {
     );
   }
 
-  const current = SITES.find((s) => s.id === site) || SITES[0];
+  const current =
+    mode === "images"
+      ? IMAGE_SITES.find((s) => s.id === imgSite) || IMAGE_SITES[0]
+      : SITES.find((s) => s.id === site) || SITES[0];
 
   return (
     <div className="adult-page">
@@ -364,6 +371,12 @@ export default function AdultPage() {
             onClick={() => setMode("sites")}
           >
             Sites
+          </button>
+          <button
+            className={`browse-tab${mode === "images" ? " browse-tab--active" : ""}`}
+            onClick={() => setMode("images")}
+          >
+            Images
           </button>
         </div>
         {mode === "browse" && (
@@ -422,11 +435,24 @@ export default function AdultPage() {
             ))}
           </div>
         )}
+        {mode === "images" && (
+          <div className="browse-tabs site-tabs">
+            {IMAGE_SITES.map((s) => (
+              <button
+                key={s.id}
+                className={`browse-tab${imgSite === s.id ? " browse-tab--active" : ""}`}
+                onClick={() => setImgSite(s.id)}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {mode === "sites" ? (
+      {mode === "sites" || mode === "images" ? (
         <webview
-          key={site}
+          key={`${mode}-${current.id}`}
           src={current.url}
           partition="persist:player"
           allowpopups="false"
