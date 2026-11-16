@@ -397,6 +397,19 @@ const ADULT_POPUNDER_JS = `(function () {
   if (window.__sbAdGuard) return;
   window.__sbAdGuard = true;
   var allowOutbound = location.hostname.indexOf("noodlemagazine") !== -1;
+  // window.open is denied by the session (returns null) — sites that call
+  // .focus()/.location on the result then crash into their error boundary.
+  // Hand back a harmless stub instead.
+  try {
+    window.open = function () {
+      var fake = { closed: false, opener: null };
+      fake.focus = fake.blur = fake.postMessage = function () {};
+      fake.close = function () {
+        fake.closed = true;
+      };
+      return fake;
+    };
+  } catch (e) {}
   function base(h) {
     var p = h.split(".");
     return p.length > 2 ? p.slice(-2).join(".") : h;
@@ -423,13 +436,24 @@ const ADULT_POPUNDER_JS = `(function () {
   }
   function kill(el) {
     try {
+      // Only touch top-level nodes: popunder scripts append overlays
+      // directly to <body>; SPA-rendered (React) elements live inside the
+      // app container and removing/hiding them can crash the whole app.
+      if (
+        el.parentNode !== document.body &&
+        el.parentNode !== document.documentElement
+      )
+        return;
       if (!el.querySelector || el.querySelector("video,canvas")) return;
       var cs = getComputedStyle(el);
       if (cs.position !== "fixed" && cs.position !== "absolute") return;
       if (parseInt(cs.zIndex, 10) < 99999999) return;
       var r = el.getBoundingClientRect();
       if (r.width * r.height < innerWidth * innerHeight * 0.5) return;
-      el.remove();
+      // hide, don't remove — removing a framework-managed node can crash
+      // the page's router/renderer with "oops"-style error boundaries
+      el.style.setProperty("display", "none", "important");
+      el.setAttribute("data-sb-hidden", "1");
     } catch (e) {}
   }
   new MutationObserver(function (muts) {
