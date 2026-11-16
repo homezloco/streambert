@@ -557,14 +557,69 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
   const start = Number.isFinite(Number(startTime)) ? Number(startTime) : 0;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;object-fit:contain;display:block}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;object-fit:contain;display:block}
+#gear{position:absolute;right:16px;bottom:64px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:15px;cursor:pointer;opacity:.85}
+#gear:hover{opacity:1}
+#menu{position:absolute;right:16px;bottom:108px;z-index:10;background:rgba(15,15,15,.92);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px;min-width:150px;font:13px/1.6 system-ui,sans-serif;color:#eee;max-height:60vh;overflow:auto}
+#menu .sec{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#999;margin:6px 4px 2px}
+#menu .sec:first-child{margin-top:0}
+#menu button{display:block;width:100%;text-align:left;background:none;border:none;color:#eee;padding:5px 8px;border-radius:4px;cursor:pointer;font:inherit}
+#menu button:hover{background:rgba(255,255,255,.1)}
+#menu button.on{color:#ff4d4d;font-weight:600}</style>
 </head><body>
 <video id="v" controls playsinline autoplay>${track}</video>
+<button id="gear" title="Quality & speed">&#9881;</button>
+<div id="menu" hidden>
+  <div class="sec" id="qsec">Quality</div>
+  <div id="levels"></div>
+  <div class="sec">Speed</div>
+  <div id="speeds"></div>
+</div>
 <script nonce="${nonce}" src="/hls.js?t=${_serverToken}"></script>
 <script nonce="${nonce}">
   const video=document.getElementById('v');
+  const gear=document.getElementById('gear');
+  const menu=document.getElementById('menu');
+  const levelsBox=document.getElementById('levels');
+  const qsec=document.getElementById('qsec');
+  const speedsBox=document.getElementById('speeds');
   const src=${jsonForScript(proxied(videoUrl))};
   const startTime=${start};
+  gear.addEventListener('click',(e)=>{e.stopPropagation();menu.hidden=!menu.hidden;});
+  menu.addEventListener('click',(e)=>e.stopPropagation());
+  document.addEventListener('click',()=>{menu.hidden=true;});
+  const SPEEDS=[0.75,1,1.25,1.5,2];
+  function rebuildSpeeds(){
+    speedsBox.innerHTML='';
+    SPEEDS.forEach((r)=>{
+      const b=document.createElement('button');
+      b.textContent=(r===1?'Normal':r+'x');
+      if(video.playbackRate===r)b.classList.add('on');
+      b.onclick=()=>{video.playbackRate=r;rebuildSpeeds();menu.hidden=true;};
+      speedsBox.appendChild(b);
+    });
+  }
+  rebuildSpeeds();
+  function buildLevels(hls){
+    // Auto first, then real levels sorted best→worst
+    const items=[{label:'Auto',idx:-1}].concat(
+      hls.levels
+        .map((l,i)=>({label:(l.height?l.height+'p':Math.round(l.bitrate/1000)+' kbps'),idx:i,h:l.height||0,b:l.bitrate}))
+        .sort((a,b)=>(b.h-a.h)||(b.b-a.b)));
+    const paint=()=>{
+      levelsBox.innerHTML='';
+      items.forEach((it)=>{
+        const b=document.createElement('button');
+        b.textContent=it.label;
+        if(hls.currentLevel===it.idx||(it.idx===-1&&hls.currentLevel===-1))b.classList.add('on');
+        b.onclick=()=>{hls.currentLevel=it.idx;paint();};
+        levelsBox.appendChild(b);
+      });
+    };
+    hls.on(Hls.Events.LEVEL_SWITCHED,paint);
+    paint();
+    qsec.style.display='';
+  }
   if(window.Hls&&Hls.isSupported()){
     const hls=new Hls({autoStartLoad:false});
     hls.loadSource(src);hls.attachMedia(video);
@@ -573,10 +628,15 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce) {
       hls.startLevel=hls.levels.length-1;
       hls.startLoad(startTime>0?startTime:-1);
       video.play().catch(()=>{});
+      if(hls.levels&&hls.levels.length>1)buildLevels(hls);
+      else qsec.style.display='none';
     });
   }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+    qsec.style.display='none';
     video.src=src;
     if(startTime>0)video.addEventListener('loadedmetadata',()=>{video.currentTime=startTime;},{once:true});
+  }else{
+    qsec.style.display='none';
   }
 </script>
 </body></html>`;
