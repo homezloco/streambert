@@ -413,7 +413,7 @@ export default function AdultPage() {
           </>
         )}
         {mode === "sites" && (
-          <div className="browse-tabs">
+          <div className="browse-tabs site-tabs">
             {SITES.map((s) => (
               <button
                 key={s.id}

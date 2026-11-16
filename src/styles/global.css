@@ -487,6 +487,16 @@ body,
     display: flex;
     gap: 6px;
 }
+/* Adult site tabs: too many to fit — scroll horizontally */
+.site-tabs {
+    overflow-x: auto;
+    max-width: 100%;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+}
+.site-tabs .browse-tab {
+    flex-shrink: 0;
+}
 .browse-tab {
     background: var(--bg2, rgba(255, 255, 255, 0.06));
     border: 1px solid var(--border);
