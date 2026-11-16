@@ -457,6 +457,8 @@ export default function TVPage({
   const statsOkRef = useRef(false);
   // Guard: at most one stats-driven auto-switch per play
   const autoSwitchedRef = useRef(false);
+  // One-shot resume seek per play
+  const resumedRef = useRef(false);
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
   const playerAccentColor = playerSettings?.accentColor ?? null;
@@ -903,7 +905,10 @@ export default function TVPage({
 
   // m3u8Url resets to null on every play/source/episode change → re-arm stats
   useEffect(() => {
-    if (!m3u8Url) statsOkRef.current = false;
+    if (!m3u8Url) {
+      statsOkRef.current = false;
+      resumedRef.current = false;
+    }
   }, [m3u8Url]);
 
   // A play that produced no stream and no resolved URL after 30s counts as a
@@ -1568,6 +1573,29 @@ export default function TVPage({
             if (ct > 2 && !statsOkRef.current) {
               statsOkRef.current = true;
               recordSourceResult(playerSource, true);
+            }
+
+            // Resume: player started near the beginning but we have a saved
+            // position → seek once (sources that don't self-persist).
+            if (!resumedRef.current) {
+              resumedRef.current = true;
+              const savedSecs =
+                storage.get("dlTime_" + currentProgressKey) || 0;
+              if (
+                savedSecs > 10 &&
+                ct < savedSecs - 10 &&
+                savedSecs < result.duration - 10
+              ) {
+                try {
+                  await wv.executeJavaScript(`
+                    (() => {
+                      const v = document.querySelector('video');
+                      if (v) v.currentTime = ${savedSecs};
+                    })()
+                  `);
+                } catch {}
+                return; // next tick reads the seeked position
+              }
             }
 
             // ── Resolution-change reset detection ──────────────────────────
