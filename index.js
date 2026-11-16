@@ -539,18 +539,23 @@ function setupSession(playerSession, trailerSession) {
     cb({ cancel: true }),
   );
 
-  // Player session: block ads + intercept m3u8/vtt URLs for renderer
+  // Player session: block ads + intercept m3u8/vtt/mp4 URLs for renderer
   const MEDIA_URLS = [
     "*://*/*.m3u8*",
     "*://*/*.m3u8",
     "*://*/*.vtt*",
     "*://*/*.vtt",
+    "*://*/*.mp4*",
+    "*://*/*.mp4",
   ];
   playerSession.webRequest.onBeforeRequest(
     { urls: [...BLOCKED_HOSTS, ...MEDIA_URLS] },
     (details, callback) => {
       const { url } = details;
-      const isMedia = url.includes(".m3u8") || url.includes(".vtt");
+      const isMedia =
+        url.includes(".m3u8") ||
+        url.includes(".vtt") ||
+        url.includes(".mp4");
       if (!isMedia) {
         blockStats.recordBlockedRequest(url);
         callback({ cancel: true });
@@ -578,6 +583,11 @@ function setupSession(playerSession, trailerSession) {
       if (mw && !mw.isDestroyed() && !url.startsWith("http://127.0.0.1")) {
         if (url.includes(".m3u8")) {
           mw.webContents.send("m3u8-found", url);
+        } else if (url.includes(".mp4")) {
+          // Only actual video-element fetches (not thumbnails/ad images)
+          if (details.resourceType === "media") {
+            mw.webContents.send("mp4-found", url);
+          }
         } else if (url.includes(".vtt")) {
           const { extractSubtitleLang } = require("./src/ipc/subtitles");
           mw.webContents.send("subtitle-found", {
@@ -597,7 +607,14 @@ function setupSession(playerSession, trailerSession) {
   // per URL, so live playlists that are re-requested every few seconds add
   // no latency or repeated work.
   playerSession.webRequest.onBeforeSendHeaders(
-    { urls: ["*://*/*.m3u8*", "*://*/*.m3u8"] },
+    {
+      urls: [
+        "*://*/*.m3u8*",
+        "*://*/*.m3u8",
+        "*://*/*.mp4*",
+        "*://*/*.mp4",
+      ],
+    },
     (details, callback) => {
       callback({ requestHeaders: details.requestHeaders });
       try {
@@ -695,6 +712,8 @@ function createWindow() {
       // The local player proxy can then replay the exact headers the embed
       // used for each captured playlist URL (multi-CDN streams).
       hianimeIpc.setStreamMetaLookup((u) => playerIpc.getStreamMeta(u));
+      // Downloads can replay Referer/Origin for hosts that 403 without them
+      downloadsIpc.setStreamMetaLookup((u) => playerIpc.getStreamMeta(u));
     }
 
     // Track player webviews for cleanup on player-stopped

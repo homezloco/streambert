@@ -502,6 +502,15 @@ select option {
     flex-wrap: wrap;
     row-gap: 4px;
 }
+/* Webview back/forward/reload controls */
+.webview-nav {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+.webview-nav .browse-tab {
+    padding: 6px 12px;
+}
 .browse-tab {
     background: var(--bg2, rgba(255, 255, 255, 0.06));
     border: 1px solid var(--border);

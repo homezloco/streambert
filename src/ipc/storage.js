@@ -32,13 +32,16 @@ function writeSecureStore(data) {
   fs.writeFileSync(secureStoreFile(), JSON.stringify(data));
 }
 
-function secureStoreGet(key) {
+async function secureStoreGet(key) {
   const store = readSecureStore();
   const raw = store[key];
   if (!raw) return null;
   try {
-    if (safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(Buffer.from(raw, "base64"));
+    if (await safeStorage.isAsyncEncryptionAvailable()) {
+      const { result } = await safeStorage.decryptStringAsync(
+        Buffer.from(raw, "base64"),
+      );
+      return result;
     }
     return Buffer.from(raw, "base64").toString("utf8");
   } catch {
@@ -46,13 +49,15 @@ function secureStoreGet(key) {
   }
 }
 
-function secureStoreSet(key, value) {
+async function secureStoreSet(key, value) {
   const store = readSecureStore();
   if (value === null || value === undefined || value === "") {
     delete store[key];
   } else {
-    if (safeStorage.isEncryptionAvailable()) {
-      store[key] = safeStorage.encryptString(value).toString("base64");
+    if (await safeStorage.isAsyncEncryptionAvailable()) {
+      store[key] = (await safeStorage.encryptStringAsync(value)).toString(
+        "base64",
+      );
     } else {
       store[key] = Buffer.from(value, "utf8").toString("base64");
     }
@@ -92,7 +97,7 @@ function writeSecretMigration() {
   }
 }
 
-function applySecretMigrationIfNeeded() {
+async function applySecretMigrationIfNeeded() {
   const mf = migrationFile();
   if (!fs.existsSync(mf)) return;
   let plain = null;
@@ -113,7 +118,7 @@ function applySecretMigrationIfNeeded() {
   if (!plain) return;
   for (const [k, v] of Object.entries(plain)) {
     try {
-      if (v) secureStoreSet(k, v);
+      if (v) await secureStoreSet(k, v);
     } catch {}
   }
 }
@@ -169,17 +174,17 @@ function shouldRunScheduledBackup(settings) {
 function register() {
   ipcMain.handle("get-app-version", () => app.getVersion());
 
-  ipcMain.handle("secure-store-get", (_, key) => {
+  ipcMain.handle("secure-store-get", async (_, key) => {
     try {
-      return { ok: true, value: secureStoreGet(key) };
+      return { ok: true, value: await secureStoreGet(key) };
     } catch {
       return { ok: false, value: null };
     }
   });
 
-  ipcMain.handle("secure-store-set", (_, { key, value }) => {
+  ipcMain.handle("secure-store-set", async (_, { key, value }) => {
     try {
-      secureStoreSet(key, value);
+      await secureStoreSet(key, value);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

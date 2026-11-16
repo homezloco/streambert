@@ -175,6 +175,14 @@ function downloadSubtitleFile(url, destPath) {
   });
 }
 
+// Injected by index.js: looks up the headers the embed used for a captured
+// media URL so direct-file downloads can replay them (some CDNs 403 without
+// Referer). Cookies are never captured or forwarded.
+let _streamMetaLookup = null;
+function setStreamMetaLookup(fn) {
+  _streamMetaLookup = fn;
+}
+
 // ── IPC registration ──────────────────────────────────────────────────────────
 
 function register(getMainWindow) {
@@ -305,6 +313,16 @@ function register(getMainWindow) {
           "-d",
           downloadPath,
         ];
+
+        // Replay the headers the page used for this media URL — direct-file
+        // CDNs (mp4) in particular 403 without the site's Referer/Origin.
+        try {
+          const meta = _streamMetaLookup ? _streamMetaLookup(m3u8Url) : null;
+          if (meta?.referer) args.push("-H", `Referer: ${meta.referer}`);
+          if (meta?.origin) args.push("-H", `Origin: ${meta.origin}`);
+          if (meta?.userAgent)
+            args.push("-H", `User-Agent: ${meta.userAgent}`);
+        } catch {}
 
         const proc = spawn(binaryPath, args, {
           stdio: ["ignore", "pipe", "pipe"],
@@ -976,5 +994,6 @@ module.exports = {
   loadDownloads,
   saveDownloads,
   killAllDownloads,
+  setStreamMetaLookup,
   getDownloads: () => downloads,
 };

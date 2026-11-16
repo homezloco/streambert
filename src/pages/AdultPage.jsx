@@ -202,10 +202,36 @@ export default function AdultPage() {
   const [confirmed, setConfirmed] = useState(
     () => storage.get("adultConfirmed") === true,
   );
-  const [mode, setMode] = useState("browse"); // browse | sites | images | creators
-  const [site, setSite] = useState(SITES[0].id);
-  const [imgSite, setImgSite] = useState(IMAGE_SITES[0].id);
-  const [creatorSite, setCreatorSite] = useState(CREATOR_SITES[0].id);
+  // mode/site selections persist across visits
+  const [mode, _setMode] = useState(
+    () => storage.get("adultMode") || "browse",
+  ); // browse | sites | images | creators
+  const [site, _setSite] = useState(
+    () => storage.get("adultSite") || SITES[0].id,
+  );
+  const [imgSite, _setImgSite] = useState(
+    () => storage.get("adultImgSite") || IMAGE_SITES[0].id,
+  );
+  const [creatorSite, _setCreatorSite] = useState(
+    () => storage.get("adultCreatorSite") || CREATOR_SITES[0].id,
+  );
+  const setMode = (v) => {
+    storage.set("adultMode", v);
+    _setMode(v);
+  };
+  const setSite = (v) => {
+    storage.set("adultSite", v);
+    _setSite(v);
+  };
+  const setImgSite = (v) => {
+    storage.set("adultImgSite", v);
+    _setImgSite(v);
+  };
+  const setCreatorSite = (v) => {
+    storage.set("adultCreatorSite", v);
+    _setCreatorSite(v);
+  };
+  const webviewRef = useRef(null);
   const [playing, setPlaying] = useState(null);
 
   // browse state
@@ -265,17 +291,23 @@ export default function AdultPage() {
   }, [mode, cat, order, query, gay, page]);
 
   // ── Downloading: reuse the movie downloader once a stream URL is captured ──
-  const [streamUrl, setStreamUrl] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null); // captured .m3u8
+  const [mp4Url, setMp4Url] = useState(null); // captured direct .mp4
   const [downloader, setDownloader] = useState(null);
   const [dlState, setDlState] = useState(null); // null | "starting" | "started" | "error"
+  const dlUrl = streamUrl || mp4Url;
 
   useEffect(() => {
     if (!playing) return;
     setStreamUrl(null);
+    setMp4Url(null);
     setDlState(null);
     if (!window.electron) return;
     const handler = window.electron.onM3u8Found?.((url) => {
       if (!url.startsWith("http://127.0.0.1")) setStreamUrl(url);
+    });
+    const mp4Handler = window.electron.onMp4Found?.((url) => {
+      if (!url.startsWith("http://127.0.0.1")) setMp4Url(url);
     });
     const folder = storage.get("downloaderFolder");
     if (folder && window.electron.checkDownloader) {
@@ -286,21 +318,24 @@ export default function AdultPage() {
     }
     return () => {
       if (handler) window.electron.offM3u8Found?.(handler);
+      if (mp4Handler) window.electron.offMp4Found?.(mp4Handler);
     };
   }, [playing]);
 
   const startDownload = async () => {
     const downloadPath = storage.get("downloadPath");
-    if (!downloader?.token || !downloadPath || !streamUrl) return;
+    if (!downloader?.token || !downloadPath || !dlUrl) return;
     setDlState("starting");
     const name = (playing?.title || "video")
       .replace(/[\\/:*?"<>|]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 120);
+    // run-download feeds the URL to the downloader binary, which handles
+    // both HLS playlists and direct mp4 files
     const result = await window.electron.runDownload({
       token: downloader.token,
-      m3u8Url: streamUrl,
+      m3u8Url: dlUrl,
       name,
       downloadPath,
     });
@@ -353,10 +388,10 @@ export default function AdultPage() {
           {downloader?.token && (
             <button
               className="btn btn-secondary dl-btn--sm"
-              disabled={!streamUrl || dlState === "starting"}
+              disabled={!dlUrl || dlState === "starting"}
               onClick={startDownload}
               title={
-                streamUrl
+                dlUrl
                   ? "Download the captured stream"
                   : "Waiting for the stream to load…"
               }
@@ -420,6 +455,31 @@ export default function AdultPage() {
             Creators
           </button>
         </div>
+        {mode !== "browse" && (
+          <div className="webview-nav">
+            <button
+              className="browse-tab"
+              title="Back"
+              onClick={() => webviewRef.current?.goBack()}
+            >
+              ←
+            </button>
+            <button
+              className="browse-tab"
+              title="Forward"
+              onClick={() => webviewRef.current?.goForward()}
+            >
+              →
+            </button>
+            <button
+              className="browse-tab"
+              title="Reload"
+              onClick={() => webviewRef.current?.reload()}
+            >
+              ⟳
+            </button>
+          </div>
+        )}
         {mode === "browse" && (
           <>
             <select
@@ -506,6 +566,7 @@ export default function AdultPage() {
 
       {mode !== "browse" ? (
         <webview
+          ref={webviewRef}
           key={`${mode}-${current.id}`}
           src={current.url}
           partition="persist:player"
