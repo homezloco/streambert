@@ -358,8 +358,8 @@ function installPopupHandler(wc) {
 const ADULT_NAV_HOSTS = [
   "eporner.com", "xvideos.com", "pornhub.com", "redtube.com",
   "chaturbate.com", "xnxx.com", "hqporner.com", "hanime.tv",
-  "rule34video.com", "njav.tv", "javmost.cx", "javtiful.com",
-  "javhd.today", "javenglish.cc", "bdsmstreak.com", "hog.tv",
+  "rule34video.com", "javmost.cx", "javtiful.com",
+  "javhd.today", "bdsmstreak.com", "hog.tv",
   "punishbang.com", "spankingtube.com", "bdsm.one", "imagefap.com",
   "pornpics.com", "erome.com", "sex.com", "babesource.com",
   "elitebabes.com", "imagepost.com", "eroticbeauties.net",
