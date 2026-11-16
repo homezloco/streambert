@@ -385,10 +385,14 @@ export default function AdultPage() {
     const mp4Handler = window.electron.onMp4Found?.((url) => {
       if (!url.startsWith("http://127.0.0.1")) setMp4Url(url);
     });
-    const subHandler = window.electron.onSubtitleFound?.(({ url }) =>
-      setSubUrl(url),
+    const subHandler = window.electron.onSubtitleFound?.(({ url, lang }) =>
+      setSubs((prev) =>
+        prev.some((s) => s.url === url)
+          ? prev
+          : [...prev, { url, lang: lang || "und" }],
+      ),
     );
-    setSubUrl(null);
+    setSubs([]);
     return () => {
       if (handler) window.electron.offM3u8Found?.(handler);
       if (mp4Handler) window.electron.offMp4Found?.(mp4Handler);
@@ -399,20 +403,24 @@ export default function AdultPage() {
   // ── Site-mode capture: same stream capture, armed for the nav ⬇ button ──
   const [siteStream, setSiteStream] = useState(null);
   const [siteDl, setSiteDl] = useState(null);
-  const [subUrl, setSubUrl] = useState(null); // latest captured .vtt
+  const [subs, setSubs] = useState([]); // every captured .vtt [{url, lang}]
   useEffect(() => {
     if (mode === "browse" || playing || !window.electron) return;
     setSiteStream(null);
     setSiteDl(null);
-    setSubUrl(null);
+    setSubs([]);
     const h1 = window.electron.onM3u8Found?.(
       (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
     );
     const h2 = window.electron.onMp4Found?.(
       (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
     );
-    const h3 = window.electron.onSubtitleFound?.(({ url }) =>
-      setSubUrl(url),
+    const h3 = window.electron.onSubtitleFound?.(({ url, lang }) =>
+      setSubs((prev) =>
+        prev.some((s) => s.url === url)
+          ? prev
+          : [...prev, { url, lang: lang || "und" }],
+      ),
     );
     return () => {
       if (h1) window.electron.offM3u8Found?.(h1);
@@ -427,7 +435,8 @@ export default function AdultPage() {
     if (!url) return;
     const res = await window.electron?.nativePlay?.({
       url,
-      subtitle: subUrl || null,
+      subtitle: subs[0]?.url || null,
+      subtitles: subs,
     });
     if (res?.ok && res.playerUrl) {
       try {

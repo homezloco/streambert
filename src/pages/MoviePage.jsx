@@ -564,7 +564,12 @@ export default function MoviePage({
       null;
     const startTime = storage.get("dlTime_" + progressKey) || 0;
     window.electron
-      ?.nativePlay({ url: m3u8Url, subtitle: sub?.url || null, startTime })
+      ?.nativePlay({
+        url: m3u8Url,
+        subtitle: sub?.url || null,
+        subtitles: interceptedSubs,
+        startTime,
+      })
       .then((r) => {
         if (r?.ok && r.playerUrl) {
           setNativePlayerUrl(r.playerUrl);

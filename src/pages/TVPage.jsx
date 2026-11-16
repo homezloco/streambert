@@ -969,7 +969,12 @@ export default function TVPage({
       : null;
     const startTime = (pk && storage.get("dlTime_" + pk)) || 0;
     window.electron
-      ?.nativePlay({ url: m3u8Url, subtitle: sub?.url || null, startTime })
+      ?.nativePlay({
+        url: m3u8Url,
+        subtitle: sub?.url || null,
+        subtitles: interceptedSubs,
+        startTime,
+      })
       .then((r) => {
         if (r?.ok && r.playerUrl) {
           setNativePlayerUrl(r.playerUrl);

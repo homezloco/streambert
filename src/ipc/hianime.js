@@ -512,6 +512,7 @@ let _currentVideoReferer = BASE_URL + "/";
 let _currentVideoOrigin = null;
 let _currentVideoUA = null;
 let _currentVideoSubtitle = null;
+let _currentVideoSubtitles = []; // [{url, lang}] — every captured track
 let _currentVideoStartTime = 0;
 // Registered local file + subtitle file for the /file and /sub routes.
 // The server only ever serves what was registered via setPlayerFile —
@@ -565,9 +566,27 @@ function rewritePlaylist(text, playlistUrl) {
 
 function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   const isFile = !!opts.isFile;
-  const track = subtitleUrl
-    ? `<track kind="subtitles" src="${escapeHtmlAttr(isFile ? `/sub?t=${_serverToken}` : proxied(subtitleUrl))}" srclang="en" label="Subtitles" default>`
-    : "";
+  // Track list: local file → the registered /sub route; remote → every
+  // captured .vtt (fallback: the single subtitleUrl for old callers).
+  const trackList = isFile
+    ? subtitleUrl
+      ? [{ src: `/sub?t=${_serverToken}`, label: "Subtitles", lang: "en" }]
+      : []
+    : Array.isArray(opts.subtitles) && opts.subtitles.length
+      ? opts.subtitles.map((s) => ({
+          src: proxied(s.url),
+          label: s.label || s.lang || "Subtitles",
+          lang: s.lang || "und",
+        }))
+      : subtitleUrl
+        ? [{ src: proxied(subtitleUrl), label: "Subtitles", lang: "en" }]
+        : [];
+  const track = trackList
+    .map(
+      (t, i) =>
+        `<track kind="subtitles" src="${escapeHtmlAttr(t.src)}" srclang="${escapeHtmlAttr(t.lang)}" label="${escapeHtmlAttr(t.label)}"${i === 0 ? " default" : ""}>`,
+    )
+    .join("");
   const start = Number.isFinite(Number(startTime)) ? Number(startTime) : 0;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -597,6 +616,8 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
 <div id="menu" hidden>
   <div class="sec" id="qsec">Quality</div>
   <div id="levels"></div>
+  <div class="sec" id="ssec" hidden>Subtitles</div>
+  <div id="subs"></div>
   <div class="sec">Speed</div>
   <div id="speeds"></div>
 </div>
@@ -730,6 +751,28 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
     });
   }
   rebuildSpeeds();
+  // ── Subtitle track selector: every captured .vtt becomes a <track>;
+  // the gear menu switches textTracks[].mode between showing/hidden.
+  const subsBox=document.getElementById('subs');
+  const ssec=document.getElementById('ssec');
+  const SUB_LABELS=${jsonForScript(trackList.map((t) => t.label))};
+  function setTrack(idx){
+    const tt=video.textTracks;
+    for(let k=0;k<tt.length;k++)tt[k].mode=(k===idx?'showing':'hidden');
+    [...subsBox.children].forEach((b,k)=>b.classList.toggle('on',k===idx+1));
+  }
+  if(SUB_LABELS.length){
+    ssec.hidden=false;
+    const mkSub=(label,idx)=>{
+      const b=document.createElement('button');
+      b.textContent=label;
+      b.onclick=()=>{setTrack(idx);menu.hidden=true;};
+      subsBox.appendChild(b);
+    };
+    mkSub('Off',-1);
+    SUB_LABELS.forEach((l,i)=>mkSub(l,i));
+    setTrack(0);
+  }
   function buildLevels(hls){
     // Auto first, then real levels sorted best→worst
     const items=[{label:'Auto',idx:-1}].concat(
@@ -1108,7 +1151,7 @@ function getPlayerServer() {
             _currentVideoStartTime || 0,
             _currentVideoFile ? !!_currentSubtitleFile : _currentVideoSubtitle,
             nonce,
-            { isFile: !!_currentVideoFile },
+            { isFile: !!_currentVideoFile, subtitles: _currentVideoSubtitles },
           ),
         );
         return;
@@ -1313,14 +1356,26 @@ async function setPlayerVideo(args = {}) {
   const origin = asString(args.origin, 512) || null;
   const userAgent = asString(args.userAgent, 512) || null;
   const subtitle = asString(args.subtitle, 4096) || null;
+  const subtitles = (Array.isArray(args.subtitles) ? args.subtitles : [])
+    .map((s) => ({
+      url: asString(s?.url, 4096),
+      lang: asString(s?.lang, 32) || null,
+    }))
+    .filter((s) => s.url)
+    .slice(0, 16);
   await assertPublicUrl(referer);
   if (origin) await assertPublicUrl(origin);
   if (subtitle) await assertPublicUrl(subtitle);
+  for (const s of subtitles) await assertPublicUrl(s.url);
+  // The explicitly chosen track leads the list so it starts as the default
+  if (subtitle && !subtitles.some((s) => s.url === subtitle))
+    subtitles.unshift({ url: subtitle, lang: null });
   _currentVideoUrl = url;
   _currentVideoReferer = referer;
   _currentVideoOrigin = origin;
   _currentVideoUA = userAgent;
   _currentVideoSubtitle = subtitle;
+  _currentVideoSubtitles = subtitles;
   _currentVideoStartTime = asPosInt(args.startTime, 0);
   _currentVideoFile = null;
   _currentSubtitleFile = null;
@@ -1352,6 +1407,7 @@ async function setPlayerFile(args = {}) {
   _currentVideoFile = file;
   _currentSubtitleFile = sub;
   _currentVideoSubtitle = null;
+  _currentVideoSubtitles = [];
   _currentVideoStartTime = asPosInt(args.startTime, 0);
   const server = await getPlayerServer();
   return {

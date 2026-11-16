@@ -247,7 +247,7 @@ function register(getMainWindow, { writeSecretMigration }) {
   // CDN requests look identical to the embed's own.
   ipcMain.handle(
     "native-play",
-    async (_, { url, subtitle, startTime } = {}) => {
+    async (_, { url, subtitle, subtitles, startTime } = {}) => {
       if (!isHttpUrl(url)) return { ok: false, error: "Invalid stream URL" };
       const meta = streamMeta.get(url) || {};
       try {
@@ -257,6 +257,7 @@ function register(getMainWindow, { writeSecretMigration }) {
           origin: meta.origin || null,
           userAgent: meta.userAgent || null,
           subtitle: subtitle || null,
+          subtitles: Array.isArray(subtitles) ? subtitles : [],
           startTime: Number.isFinite(+startTime) ? +startTime : 0,
         });
         return { ok: true, playerUrl: r.playerUrl };
