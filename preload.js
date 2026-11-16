@@ -112,6 +112,7 @@ contextBridge.exposeInMainWorld("electron", {
   offBlockedUpdate: (h) =>
     ipcRenderer.removeListener("blocked-stats-update", h),
   getBlockStats: () => ipcRenderer.invoke("get-block-stats"),
+  clearPlayerSession: () => ipcRenderer.invoke("clear-player-session"),
 
   // Desktop notifications (triggered from renderer, executed in main)
   showNotification: ({ title, body, silent }) =>

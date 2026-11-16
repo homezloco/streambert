@@ -2541,6 +2541,7 @@ function NetworkSection() {
   const [cfg, setCfg] = useState(null);
   const [saved, setSaved] = useState(false);
   const [restartNeeded, setRestartNeeded] = useState(false);
+  const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
@@ -2731,6 +2732,19 @@ function NetworkSection() {
         <button className="btn btn-primary" onClick={save}>
           Save
         </button>
+        <button
+          className="btn btn-secondary"
+          title="Clear cookies, cache and site data for embedded player pages — this also logs you out of sites like Fansly"
+          onClick={async () => {
+            const r = await window.electron?.clearPlayerSession?.();
+            setCleared(r?.ok === true);
+          }}
+        >
+          Clear player session data
+        </button>
+        {cleared && (
+          <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Cleared</span>
+        )}
         {saved && (
           <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Saved</span>
         )}

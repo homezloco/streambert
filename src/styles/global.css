@@ -502,6 +502,16 @@ select option {
     flex-wrap: wrap;
     row-gap: 4px;
 }
+.adult-recents {
+    margin-bottom: 10px;
+    opacity: 0.85;
+}
+.adult-recents-label {
+    color: var(--text3);
+    font-size: 12px;
+    align-self: center;
+}
+
 /* Webview back/forward/reload controls */
 .webview-nav {
     display: flex;

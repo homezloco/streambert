@@ -232,7 +232,21 @@ export default function AdultPage() {
     _setCreatorSite(v);
   };
   const webviewRef = useRef(null);
-  const [playing, setPlaying] = useState(null);
+  const [playing, _setPlaying] = useState(null);
+  const [recents, setRecents] = useState(
+    () => storage.get("adultRecents") || [],
+  );
+  const setPlaying = (v) => {
+    if (v) {
+      const next = [
+        { id: v.id, title: v.title, embed: v.embed, url: v.url },
+        ...recents.filter((r) => r.id !== v.id),
+      ].slice(0, 12);
+      setRecents(next);
+      storage.set("adultRecents", next);
+    }
+    _setPlaying(v);
+  };
 
   // browse state
   const [cat, setCat] = useState(null);
@@ -297,6 +311,17 @@ export default function AdultPage() {
   const [dlState, setDlState] = useState(null); // null | "starting" | "started" | "error"
   const dlUrl = streamUrl || mp4Url;
 
+  // Downloader availability is mode-independent — check once
+  useEffect(() => {
+    const folder = storage.get("downloaderFolder");
+    if (folder && window.electron?.checkDownloader) {
+      window.electron
+        .checkDownloader(folder)
+        .then((r) => setDownloader(r))
+        .catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (!playing) return;
     setStreamUrl(null);
@@ -309,18 +334,30 @@ export default function AdultPage() {
     const mp4Handler = window.electron.onMp4Found?.((url) => {
       if (!url.startsWith("http://127.0.0.1")) setMp4Url(url);
     });
-    const folder = storage.get("downloaderFolder");
-    if (folder && window.electron.checkDownloader) {
-      window.electron
-        .checkDownloader(folder)
-        .then((r) => setDownloader(r))
-        .catch(() => {});
-    }
     return () => {
       if (handler) window.electron.offM3u8Found?.(handler);
       if (mp4Handler) window.electron.offMp4Found?.(mp4Handler);
     };
   }, [playing]);
+
+  // ── Site-mode capture: same stream capture, armed for the nav ⬇ button ──
+  const [siteStream, setSiteStream] = useState(null);
+  const [siteDl, setSiteDl] = useState(null);
+  useEffect(() => {
+    if (mode === "browse" || playing || !window.electron) return;
+    setSiteStream(null);
+    setSiteDl(null);
+    const h1 = window.electron.onM3u8Found?.(
+      (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
+    );
+    const h2 = window.electron.onMp4Found?.(
+      (u) => !u.startsWith("http://127.0.0.1") && setSiteStream(u),
+    );
+    return () => {
+      if (h1) window.electron.offM3u8Found?.(h1);
+      if (h2) window.electron.offMp4Found?.(h2);
+    };
+  }, [mode, playing]);
 
   const startDownload = async () => {
     const downloadPath = storage.get("downloadPath");
@@ -340,6 +377,28 @@ export default function AdultPage() {
       downloadPath,
     });
     setDlState(result?.ok ? "started" : "error");
+  };
+
+  const startSiteDownload = async () => {
+    const downloadPath = storage.get("downloadPath");
+    if (!downloader?.token || !downloadPath || !siteStream) return;
+    setSiteDl("starting");
+    let title = "";
+    try {
+      title = webviewRef.current?.getTitle?.() || "";
+    } catch {}
+    const name = (title || "video")
+      .replace(/[\\/:*?"<>|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const result = await window.electron.runDownload({
+      token: downloader.token,
+      m3u8Url: siteStream,
+      name,
+      downloadPath,
+    });
+    setSiteDl(result?.ok ? "started" : "error");
   };
 
   // Same cleanup as the player pages: release tracked player webContents.
@@ -478,6 +537,20 @@ export default function AdultPage() {
             >
               ⟳
             </button>
+            {downloader?.token && (
+              <button
+                className="browse-tab"
+                disabled={!siteStream || siteDl === "starting"}
+                title={
+                  siteStream
+                    ? "Download the captured stream"
+                    : "Play a video to capture its stream"
+                }
+                onClick={startSiteDownload}
+              >
+                {siteDl === "started" ? "✓" : siteDl === "error" ? "!" : "⬇"}
+              </button>
+            )}
           </div>
         )}
         {mode === "browse" && (
@@ -576,6 +649,21 @@ export default function AdultPage() {
         />
       ) : (
         <div className="adult-browse">
+          {recents.length > 0 && (
+            <div className="browse-genres adult-recents">
+              <span className="adult-recents-label">Recent:</span>
+              {recents.map((r) => (
+                <button
+                  key={r.id}
+                  className="browse-chip"
+                  title={r.title}
+                  onClick={() => setPlaying(r)}
+                >
+                  {r.title.length > 36 ? r.title.slice(0, 36) + "…" : r.title}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="browse-genres">
             <button
               className={`browse-chip${cat === null ? " browse-chip--active" : ""}`}

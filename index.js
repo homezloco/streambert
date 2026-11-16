@@ -801,6 +801,17 @@ app.whenReady().then(() => networkIpc.applyNetwork());
 // get-block-stats lives with its data
 ipcMain.handle("get-block-stats", () => blockStats.getBlockStats());
 
+// Wipe the player partition's cookies/cache/site data — clears embedded-site
+// logins (e.g. Fansly) and any state streaming sites persisted.
+ipcMain.handle("clear-player-session", async () => {
+  try {
+    await session.fromPartition("persist:player").clearData();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
 // -- Player memory cleanup ---------------------------------------------
 // Called by MoviePage / TVPage on component unmount.
 // Mutes the tracked player webview WebContents and triggers GC hints.
