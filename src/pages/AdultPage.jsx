@@ -103,10 +103,14 @@ const DURS = [
   { id: "xlong", label: "30+ min", test: (s) => s >= 1800 },
 ];
 
+// rate is a 0–5 score (the card badge shows it as rate×20 %)
 const RATINGS = [
   { id: "", label: "Any rating" },
-  { id: "4", label: "4+ rating", min: 4 },
-  { id: "4.5", label: "4.5+ rating", min: 4.5 },
+  { id: "3.5", label: "70%+ rated", min: 3.5 },
+  { id: "4", label: "80%+ rated", min: 4 },
+  { id: "4.25", label: "85%+ rated", min: 4.25 },
+  { id: "4.5", label: "90%+ rated", min: 4.5 },
+  { id: "4.75", label: "95%+ rated", min: 4.75 },
 ];
 
 const CATS = [
