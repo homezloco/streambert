@@ -544,6 +544,19 @@ export default function DownloadsPage({
         <div className="dl-page__local-header">
           <div className="settings-section-title dl-section-title--inline">
             Local Files
+            {allLocalItems.length > 0 && (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "var(--text3)",
+                  fontWeight: 400,
+                  marginLeft: 8,
+                }}
+              >
+                {allLocalItems.length} item
+                {allLocalItems.length === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
           <div className="dl-page__scan-controls">
             {isElectron && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import MediaCard from "../components/MediaCard";
 import { tmdbFetch, MOVIE_GENRES, TV_GENRES } from "../utils/api";
 import { useRatings, getRatingForItem } from "../utils/useRatings";
@@ -85,6 +85,22 @@ export default function BrowsePage({
       isRestricted(getRatingForItem(item, ratingsMap).minAge, ageLimitSetting),
     [ratingsMap, ageLimitSetting],
   );
+
+  // Auto-load the next page when the sentinel nears the viewport
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading)
+          setPageNum((n) => n + 1);
+      },
+      { rootMargin: "600px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, loading]);
 
   const enrichedRatingsMap = useMemo(() => {
     const out = {};
@@ -192,6 +208,7 @@ export default function BrowsePage({
 
         {items.length > 0 && hasMore && (
           <div style={{ textAlign: "center", marginTop: 20 }}>
+            <div ref={sentinelRef} />
             <button
               className="btn btn-secondary"
               disabled={loading}
