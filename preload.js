@@ -211,6 +211,7 @@ contextBridge.exposeInMainWorld("electron", {
 
   fetchReleaseImage: (url) =>
     ipcRenderer.invoke("fetch-release-image", { url }),
+  copyText: (text) => ipcRenderer.invoke("copy-text", text),
 
   // Discord Rich Presence (off by default, toggled in Settings)
   discordRpcSetEnabled: (enabled) =>

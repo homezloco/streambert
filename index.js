@@ -266,6 +266,63 @@ const BLOCKED_HOSTS = [
   "*://*.e89d45b16370ee7e43daeaf6ce8d9547.com/*",
   "*://tsyndicate.com/*",
   "*://*.tsyndicate.com/*",
+  // Major mainstream + adult ad/tracker networks (log-observed + known lists)
+  "*://exoclick.com/*",
+  "*://*.exoclick.com/*",
+  "*://juicyads.com/*",
+  "*://*.juicyads.com/*",
+  "*://trafficjunky.com/*",
+  "*://*.trafficjunky.com/*",
+  "*://trafficjunky.net/*",
+  "*://*.trafficjunky.net/*",
+  "*://ero-advertising.com/*",
+  "*://*.ero-advertising.com/*",
+  "*://adnxs.com/*",
+  "*://*.adnxs.com/*",
+  "*://popads.net/*",
+  "*://*.popads.net/*",
+  "*://popcash.net/*",
+  "*://*.popcash.net/*",
+  "*://hilltopads.net/*",
+  "*://*.hilltopads.net/*",
+  "*://adsterra.com/*",
+  "*://*.adsterra.com/*",
+  "*://clickadu.com/*",
+  "*://*.clickadu.com/*",
+  "*://trafficfactory.biz/*",
+  "*://*.trafficfactory.biz/*",
+  "*://exosrv.com/*",
+  "*://*.exosrv.com/*",
+  "*://magsrv.com/*",
+  "*://*.magsrv.com/*",
+  "*://adglare.net/*",
+  "*://*.adglare.net/*",
+  "*://realsrv.com/*",
+  "*://*.realsrv.com/*",
+  "*://adskeeper.co.uk/*",
+  "*://*.adskeeper.co.uk/*",
+  "*://adskeeper.com/*",
+  "*://*.adskeeper.com/*",
+  "*://revcontent.com/*",
+  "*://*.revcontent.com/*",
+  "*://taboola.com/*",
+  "*://*.taboola.com/*",
+  "*://outbrain.com/*",
+  "*://*.outbrain.com/*",
+  "*://adtng.com/*",
+  "*://*.adtng.com/*",
+  "*://adtng.net/*",
+  "*://*.adtng.net/*",
+  "*://mixadvert.com/*",
+  "*://*.mixadvert.com/*",
+  "*://yllix.com/*",
+  "*://*.yllix.com/*",
+  "*://plugrush.com/*",
+  "*://*.plugrush.com/*",
+  "*://ad-maven.com/*",
+  "*://*.ad-maven.com/*",
+  "*://adriver.ru/*",
+  "*://*.adriver.ru/*",
   "*://rapidadexchange.com/*",
   "*://*.rapidadexchange.com/*",
   "*://cepesbritons.qpon/*",
@@ -1023,6 +1080,15 @@ ipcMain.handle("popout-window-is-maximized", () => {
   return pipWindow && !pipWindow.isDestroyed()
     ? pipWindow.isMaximized()
     : false;
+});
+
+// Clipboard write fallback for renderers where navigator.clipboard is
+// unavailable (non-secure-context quirks). Length-capped plain text only.
+ipcMain.handle("copy-text", (_, text) => {
+  if (typeof text !== "string" || !text) return false;
+  const { clipboard } = require("electron");
+  clipboard.writeText(text.slice(0, 4096));
+  return true;
 });
 
 // -- Single-instance lock ------------------------------------------------------

@@ -435,17 +435,63 @@ export default function AdultPage() {
 
   // Swap a captured stream into the app's own hls.js player — no site ads,
   // native speed/quality controls, subtitle track if one was captured.
+  // Native-swap playback is tracked so a revisit resumes where you left off:
+  // key is the video's browse id or the site page URL that spawned the swap
+  const nativeCtxRef = useRef(null); // {key} for the active native playback
   const playNative = async (url) => {
     if (!url) return;
+    let key = null;
+    try {
+      key = playing
+        ? `v_${playing.id}`
+        : `p_${webviewRef.current.getURL()}`;
+    } catch {}
+    nativeCtxRef.current = key ? { key } : null;
+    const startTime = key ? storage.get("adultResume_" + key) || 0 : 0;
     const res = await window.electron?.nativePlay?.({
       url,
       subtitle: subs[0]?.url || null,
       subtitles: subs,
+      startTime,
     });
     if (res?.ok && res.playerUrl) {
       try {
         webviewRef.current.src = res.playerUrl;
       } catch {}
+    }
+  };
+
+  // While the webview hosts the local player, poll its <video> every 5s and
+  // persist the position (progress events return null while paused — saves
+  // only happen during active playback; finishing resets to 0)
+  useEffect(() => {
+    const t = setInterval(async () => {
+      const ctx = nativeCtxRef.current;
+      const wv = webviewRef.current;
+      if (!ctx?.key || !wv) return;
+      try {
+        if (!wv.getURL().startsWith("http://127.0.0.1")) return;
+        const r = await window.electron?.queryVideoProgress?.(
+          wv.getWebContentsId(),
+        );
+        if (!r) return;
+        if (r.currentTime > 15 && r.duration - r.currentTime > 20) {
+          storage.set("adultResume_" + ctx.key, Math.floor(r.currentTime));
+        } else if (r.duration - r.currentTime <= 20) {
+          storage.set("adultResume_" + ctx.key, 0);
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Copy the captured stream URL (for pasting into an external player)
+  const copyStream = async () => {
+    if (!siteStream) return;
+    try {
+      await navigator.clipboard.writeText(siteStream);
+    } catch {
+      window.electron?.copyText?.(siteStream);
     }
   };
 
@@ -730,6 +776,18 @@ export default function AdultPage() {
             )}
             <button
               className="browse-tab"
+              disabled={!siteStream}
+              title={
+                siteStream
+                  ? "Copy the captured stream URL (for an external player)"
+                  : "Play a video to capture its stream"
+              }
+              onClick={copyStream}
+            >
+              ⎘
+            </button>
+            <button
+              className="browse-tab"
               title="Zoom out"
               onClick={() => zoomWebview(-0.15)}
             >
@@ -861,6 +919,16 @@ export default function AdultPage() {
                   {r.title.length > 36 ? r.title.slice(0, 36) + "…" : r.title}
                 </button>
               ))}
+              <button
+                className="browse-chip"
+                title="Clear recently watched"
+                onClick={() => {
+                  storage.set("adultRecents", []);
+                  setRecents([]);
+                }}
+              >
+                Clear
+              </button>
             </div>
           )}
           <div className="browse-genres">

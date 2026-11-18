@@ -632,6 +632,15 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   const src=${jsonForScript(isFile ? `/file?t=${_serverToken}` : proxied(videoUrl))};
   const startTime=${start};
   const isFile=${isFile ? "true" : "false"};
+  // Persist playback speed + volume across sessions via host-scoped cookies
+  // (cookies ignore the player's random port where localStorage wouldn't)
+  const ck=(n)=>{const m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?decodeURIComponent(m[1]):null};
+  const svRate=parseFloat(ck('sb_rate'));
+  if(svRate>=0.25&&svRate<=4)video.playbackRate=svRate;
+  const svVol=parseFloat(ck('sb_vol'));
+  if(svVol>=0&&svVol<=1)video.volume=svVol;
+  video.addEventListener('ratechange',()=>{document.cookie='sb_rate='+video.playbackRate+';path=/;max-age=31536000'});
+  video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000'});
   // ── Timeline strip: progress fill, buffered range, hover thumbnails ──
   // A hidden second video element renders frames for the preview bubble.
   const seekbar=document.getElementById('seekbar');
