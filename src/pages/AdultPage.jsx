@@ -568,6 +568,12 @@ export default function AdultPage() {
   // ── Infinite scroll: auto-load the next page near the bottom ──
   const browseRef = useRef(null);
   const sentinelRef = useRef(null);
+  const savedScroll = useRef(0);
+  // Restore scroll position when returning from the playing view
+  useEffect(() => {
+    if (!playing && browseRef.current && savedScroll.current > 0)
+      browseRef.current.scrollTop = savedScroll.current;
+  }, [playing]);
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -905,7 +911,13 @@ export default function AdultPage() {
           className="adult-webview"
         />
       ) : (
-        <div className="adult-browse" ref={browseRef}>
+        <div
+          className="adult-browse"
+          ref={browseRef}
+          onScroll={(e) => {
+            savedScroll.current = e.currentTarget.scrollTop;
+          }}
+        >
           {recents.length > 0 && (
             <div className="browse-genres adult-recents">
               <span className="adult-recents-label">Recent:</span>

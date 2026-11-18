@@ -9,6 +9,7 @@ export default function BlockedStatsModal({
   sessionDomains,
   sessionTotal,
   alltimeTotal,
+  subtitle,
   onClose,
 }) {
   // Close on Escape
@@ -38,9 +39,10 @@ export default function BlockedStatsModal({
         </div>
 
         <div className="blocked-modal-subtitle">
-          {sessionTotal > 0
-            ? `${sessionTotal} ad/tracker request${sessionTotal === 1 ? "" : "s"} blocked this session`
-            : "Start playing content to see blocked ads & trackers."}
+          {subtitle ??
+            (sessionTotal > 0
+              ? `${sessionTotal} ad/tracker request${sessionTotal === 1 ? "" : "s"} blocked this session`
+              : "Start playing content to see blocked ads & trackers.")}
         </div>
 
         <div className="blocked-modal-list">

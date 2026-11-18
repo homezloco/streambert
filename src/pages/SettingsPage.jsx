@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import UpdateModal from "../components/UpdateModal";
+import BlockedStatsModal from "../components/BlockedStatsModal";
 import {
   storage,
   STORAGE_KEYS,
@@ -2543,6 +2544,7 @@ function NetworkSection() {
   const [restartNeeded, setRestartNeeded] = useState(false);
   const [cleared, setCleared] = useState(false);
   const [blockStats, setBlockStats] = useState(null);
+  const [showBlockModal, setShowBlockModal] = useState(false);
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
@@ -2758,10 +2760,28 @@ function NetworkSection() {
                   .sort((a, b) => b[1] - a[1])
                   .slice(0, 5)
                   .map(([d, n]) => `${d} (${n})`)
-                  .join(", ")}
+                  .join(", ")}{" "}
+                <button
+                  className="btn btn-ghost dl-btn--sm"
+                  style={{ padding: "1px 8px", fontSize: 11 }}
+                  onClick={() => setShowBlockModal(true)}
+                >
+                  View all
+                </button>
               </div>
             )}
           </div>
+          {showBlockModal && (
+            <BlockedStatsModal
+              sessionDomains={Object.entries(blockStats.domains || {}).sort(
+                (a, b) => b[1] - a[1],
+              )}
+              sessionTotal={blockStats.total || 0}
+              alltimeTotal={blockStats.total || 0}
+              subtitle="All-time blocked requests by domain"
+              onClose={() => setShowBlockModal(false)}
+            />
+          )}
         </>
       )}
 
