@@ -7,7 +7,12 @@ import { isRestricted } from "../utils/ageRating";
 const SORTS = [
   { id: "popularity.desc", label: "Most Popular" },
   { id: "vote_average.desc", label: "Top Rated" },
+  { id: "year.desc", label: "Newest" },
+  { id: "year.asc", label: "Oldest" },
 ];
+
+const itemYear = (i) =>
+  parseInt((i.release_date || i.first_air_date || "").slice(0, 4)) || 0;
 
 export default function BrowsePage({
   apiKey,
@@ -45,7 +50,17 @@ export default function BrowsePage({
       .then((d) => {
         if (!mounted) return;
         const res = (d?.results || []).map((i) => ({ ...i, media_type: type }));
-        setItems((prev) => (pageNum === 1 ? res : [...prev, ...res]));
+        setItems((prev) => {
+          const merged = pageNum === 1 ? res : [...prev, ...res];
+          // Keep the accumulated list in year order across appended pages
+          if (sort === "year.desc" || sort === "year.asc") {
+            const dir = sort === "year.desc" ? -1 : 1;
+            return [...merged].sort(
+              (a, b) => dir * (itemYear(a) - itemYear(b)),
+            );
+          }
+          return merged;
+        });
         if (res.length < 10) setHasMore(false);
       })
       .catch(() => {

@@ -446,14 +446,30 @@ export async function cinemetaFetch(path) {
     const type = m[1] === "movie" ? "movie" : "series";
     const page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
     const sort = params.get("sort_by") || "popularity.desc";
-    const catalogId = sort === "vote_average.desc" ? "imdbRating" : "top";
     const genreId = params.get("with_genres");
     const genreMap = m[1] === "movie" ? MOVIE_GENRES : TV_GENRES;
     const genre = genreId ? genreMap[genreId] || null : null;
-    return catalog(type, catalogId, {
+    // year= catalog exists but has no genre support — with a genre selected,
+    // fall back to the top catalog and let the client-side year sort order it
+    const catalogId =
+      sort === "vote_average.desc"
+        ? "imdbRating"
+        : sort === "year.desc" && !genre
+          ? "year"
+          : "top";
+    const out = await catalog(type, catalogId, {
       skip: (page - 1) * 100,
       genre,
     });
+    // Cinemeta's year catalog is only loosely ordered — enforce a strict
+    // year sort on each fetched page (also covers top+genre fallbacks)
+    if (sort === "year.desc" || sort === "year.asc") {
+      const dir = sort === "year.desc" ? -1 : 1;
+      const yr = (i) =>
+        parseInt((i.release_date || i.first_air_date || "").slice(0, 4)) || 0;
+      out.results.sort((a, b) => dir * (yr(a) - yr(b)));
+    }
+    return out;
   }
 
   // /search/multi
