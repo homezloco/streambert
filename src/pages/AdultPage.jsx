@@ -304,7 +304,11 @@ export default function AdultPage() {
   };
 
   // browse state
-  const [cat, setCat] = useState(null);
+  const [cat, _setCat] = useState(() => storage.get("adultCat") || null);
+  const setCat = (v) => {
+    storage.set("adultCat", v);
+    _setCat(v);
+  };
   // Persisted browse filters — coming back keeps your sort/length/rating
   const [order, _setOrder] = useState(
     () => storage.get("adultOrder") || "top-weekly",
@@ -325,7 +329,11 @@ export default function AdultPage() {
   };
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
-  const [gay, setGay] = useState(false);
+  const [gay, _setGay] = useState(() => storage.get("adultGay") === true);
+  const setGay = (v) => {
+    storage.set("adultGay", v);
+    _setGay(v);
+  };
   const [videos, setVideos] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);

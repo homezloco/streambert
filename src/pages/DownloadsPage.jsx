@@ -237,13 +237,7 @@ export default function DownloadsPage({
       if (!p?.filePath || !Number.isFinite(p.seconds)) return;
       setLiveProgress((prev) => ({ ...prev, [p.filePath]: p.seconds }));
       const dl = itemsRef.current.find((x) => x.filePath === p.filePath);
-      const wk =
-        dl &&
-        (dl.mediaType === "movie"
-          ? `movie_${dl.tmdbId || dl.mediaId}`
-          : dl.mediaType === "tv" && dl.tmdbId && dl.season && dl.episode
-            ? `tv_${dl.tmdbId}_s${dl.season}e${dl.episode}`
-            : null);
+      const wk = dl && dlWatchedKey(dl);
       if (wk) storage.set(PROGRESS_TIME_PREFIX + wk, p.seconds);
     };
     window.electron.onLocalPlayProgress(h);
@@ -557,6 +551,24 @@ export default function DownloadsPage({
                 {allLocalItems.length === 1 ? "" : "s"}
               </span>
             )}
+            {allLocalItems.some(
+              (dl) => watched?.[dlWatchedKey(dl)],
+            ) && (
+              <button
+                className="btn btn-ghost btn--sm"
+                style={{ marginLeft: 10, fontSize: 11 }}
+                title="Clear watched marks on all local items (files stay)"
+                onClick={() => {
+                  const keys = allLocalItems
+                    .map(dlWatchedKey)
+                    .filter((k) => k && watched?.[k]);
+                  if (!confirm(`Clear ${keys.length} watched marks?`)) return;
+                  keys.forEach((k) => onMarkUnwatched?.(k));
+                }}
+              >
+                Clear watched
+              </button>
+            )}
           </div>
           <div className="dl-page__scan-controls">
             {isElectron && (
@@ -595,15 +607,7 @@ export default function DownloadsPage({
           <div className="dl-page__local-list">
             {allLocalItems.map((dl) => {
               const isHighlighted = dl.id === highlightId;
-              const watchedKey =
-                dl.mediaType === "movie"
-                  ? `movie_${dl.tmdbId || dl.mediaId}`
-                  : dl.mediaType === "tv" &&
-                      dl.tmdbId &&
-                      dl.season &&
-                      dl.episode
-                    ? `tv_${dl.tmdbId}_s${dl.season}e${dl.episode}`
-                    : null;
+              const watchedKey = dlWatchedKey(dl);
               return (
                 <LocalFileCard
                   key={dl.id}
@@ -781,6 +785,14 @@ function hmsToSecs(str) {
 
 const PROGRESS_TIME_PREFIX = "dlTime_";
 const DURATION_PREFIX = "dlDur_";
+
+// Progress/watched key for a local item (same scheme as the watch pages)
+const dlWatchedKey = (dl) =>
+  dl.mediaType === "movie"
+    ? `movie_${dl.tmdbId || dl.mediaId}`
+    : dl.mediaType === "tv" && dl.tmdbId && dl.season && dl.episode
+      ? `tv_${dl.tmdbId}_s${dl.season}e${dl.episode}`
+      : null;
 
 // ── Local file / completed download card ──────────────────────────────────────
 const LocalFileCard = memo(function LocalFileCard({

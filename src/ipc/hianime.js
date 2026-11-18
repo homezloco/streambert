@@ -661,6 +661,8 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
       case 'ArrowDown':video.volume=Math.max(0,video.volume-0.1);e.preventDefault();break;
       case 'f':case 'F':document.fullscreenElement?document.exitFullscreen():video.requestFullscreen();break;
       case 'm':case 'M':video.muted=!video.muted;break;
+      case ',':video.pause();video.currentTime=Math.max(0,video.currentTime-1/30);break;
+      case '.':video.pause();video.currentTime=Math.min(video.duration||Infinity,video.currentTime+1/30);break;
     }
   });
   video.addEventListener('dblclick',()=>{document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
