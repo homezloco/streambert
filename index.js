@@ -856,6 +856,19 @@ playerIpc.register(getMainWindow, {
   openLocalPlayer: openLocalPlayerWindow,
 });
 blockStats.init(getMainWindow);
+
+// Local player → renderer progress bridge: the player page POSTs its position
+// to the localhost server; forward it so Downloads can persist resume points.
+hianimeIpc.setProgressListener?.(({ file, t, d }) => {
+  const mw = getMainWindow();
+  if (file && mw && !mw.isDestroyed()) {
+    mw.webContents.send("local-play-progress", {
+      filePath: file,
+      seconds: Math.floor(t),
+      duration: Math.floor(d),
+    });
+  }
+});
 discordRpc.register(ipcMain);
 networkIpc.register();
 app.whenReady().then(() => networkIpc.applyNetwork());

@@ -513,6 +513,10 @@ let _currentVideoOrigin = null;
 let _currentVideoUA = null;
 let _currentVideoSubtitle = null;
 let _currentVideoSubtitles = []; // [{url, lang}] — every captured track
+let _progressListener = null; // ({file, streamUrl, t, d}) — set by index.js
+function setProgressListener(fn) {
+  _progressListener = typeof fn === "function" ? fn : null;
+}
 let _currentVideoStartTime = 0;
 // Registered local file + subtitle file for the /file and /sub routes.
 // The server only ever serves what was registered via setPlayerFile —
@@ -641,6 +645,10 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   if(svVol>=0&&svVol<=1)video.volume=svVol;
   video.addEventListener('ratechange',()=>{document.cookie='sb_rate='+video.playbackRate+';path=/;max-age=31536000'});
   video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000'});
+  // Report position back so the app can offer resume on the next open
+  const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
+  setInterval(()=>{if(!video.paused)report()},5000);
+  window.addEventListener('beforeunload',()=>{try{navigator.sendBeacon('/progress?t='+new URLSearchParams(location.search).get('t'),JSON.stringify({t:video.currentTime,d:video.duration}))}catch(e){}});
   // ── Timeline strip: progress fill, buffered range, hover thumbnails ──
   // A hidden second video element renders frames for the preview bubble.
   const seekbar=document.getElementById('seekbar');
@@ -1123,9 +1131,12 @@ function getPlayerServer() {
   if (_playerServer) return Promise.resolve(_playerServer);
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      // DNS-rebinding guard + token check
+      // DNS-rebinding guard + token check (POST only for /progress)
       const port = server.address()?.port;
-      if (req.method !== "GET" || req.headers.host !== `127.0.0.1:${port}`) {
+      if (
+        (req.method !== "GET" && req.method !== "POST") ||
+        req.headers.host !== `127.0.0.1:${port}`
+      ) {
         res.writeHead(403);
         res.end();
         return;
@@ -1139,6 +1150,30 @@ function getPlayerServer() {
       ) {
         res.writeHead(403);
         res.end();
+        return;
+      }
+
+      // Playback position reports from the player page → forwarded to the
+      // registered listener (main process → renderer) for resume bookkeeping
+      if (url.pathname === "/progress" && req.method === "POST") {
+        let body = "";
+        req.on("data", (c) => {
+          body += c;
+          if (body.length > 8192) req.destroy();
+        });
+        req.on("end", () => {
+          try {
+            const p = JSON.parse(body);
+            _progressListener?.({
+              file: _currentVideoFile || null,
+              streamUrl: _currentVideoUrl || null,
+              t: Math.max(0, +p.t || 0),
+              d: Math.max(0, +p.d || 0),
+            });
+          } catch {}
+          res.writeHead(204);
+          res.end();
+        });
         return;
       }
 
@@ -1558,6 +1593,7 @@ module.exports = {
   setPlayerVideo,
   setPlayerFile,
   setStreamMetaLookup,
+  setProgressListener,
   // exported for tests
   _internal: {
     deobfuscateBlob,

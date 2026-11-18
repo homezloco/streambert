@@ -226,6 +226,30 @@ export default function DownloadsPage({
   const q = searchQuery.trim().toLowerCase();
   const searchResultCount = q ? allLocalItems.length : null;
 
+  // Playback progress reported by the in-app player window — persist it
+  // under the same dlTime_ key the card reads, and push it live into the UI
+  const itemsRef = useRef(allLocalItems);
+  itemsRef.current = allLocalItems;
+  const [liveProgress, setLiveProgress] = useState({}); // filePath -> secs
+  useEffect(() => {
+    if (!window.electron?.onLocalPlayProgress) return;
+    const h = (_, p) => {
+      if (!p?.filePath || !Number.isFinite(p.seconds)) return;
+      setLiveProgress((prev) => ({ ...prev, [p.filePath]: p.seconds }));
+      const dl = itemsRef.current.find((x) => x.filePath === p.filePath);
+      const wk =
+        dl &&
+        (dl.mediaType === "movie"
+          ? `movie_${dl.tmdbId || dl.mediaId}`
+          : dl.mediaType === "tv" && dl.tmdbId && dl.season && dl.episode
+            ? `tv_${dl.tmdbId}_s${dl.season}e${dl.episode}`
+            : null);
+      if (wk) storage.set(PROGRESS_TIME_PREFIX + wk, p.seconds);
+    };
+    window.electron.onLocalPlayProgress(h);
+    return () => window.electron.offLocalPlayProgress?.(h);
+  }, []);
+
   useEffect(() => {
     if (!highlightId || !highlightRef.current) return;
     const el = highlightRef.current;
@@ -591,6 +615,7 @@ export default function DownloadsPage({
                   onMarkWatched={
                     watchedKey ? () => onMarkWatched?.(watchedKey) : null
                   }
+                  liveSecs={liveProgress[dl.filePath]}
                   onMarkUnwatched={
                     watchedKey ? () => onMarkUnwatched?.(watchedKey) : null
                   }
@@ -761,6 +786,7 @@ const LocalFileCard = memo(function LocalFileCard({
   onHistory,
   onOpenSubtitleDownloader,
   onOpenLog,
+  liveSecs,
 }) {
   const isDownload = !dl.isLocalOnly;
   const canWatch = !!fileExists && !!dl.filePath;
@@ -790,6 +816,11 @@ const LocalFileCard = memo(function LocalFileCard({
     if (!storageKey) return;
     setSavedSecs(storage.get(storageKey) ?? null);
   }, [storageKey]);
+
+  // Live progress pushed by the in-app player window while this file plays
+  useEffect(() => {
+    if (typeof liveSecs === "number") setSavedSecs(liveSecs);
+  }, [liveSecs]);
 
   // Fetch video duration once when popover first opens
   useEffect(() => {

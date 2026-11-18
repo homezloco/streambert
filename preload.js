@@ -212,6 +212,9 @@ contextBridge.exposeInMainWorld("electron", {
   fetchReleaseImage: (url) =>
     ipcRenderer.invoke("fetch-release-image", { url }),
   copyText: (text) => ipcRenderer.invoke("copy-text", text),
+  onLocalPlayProgress: (h) => ipcRenderer.on("local-play-progress", h),
+  offLocalPlayProgress: (h) =>
+    ipcRenderer.removeListener("local-play-progress", h),
 
   // Discord Rich Presence (off by default, toggled in Settings)
   discordRpcSetEnabled: (enabled) =>
