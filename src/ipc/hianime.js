@@ -649,6 +649,19 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
   window.addEventListener('beforeunload',()=>{try{navigator.sendBeacon('/progress?t='+new URLSearchParams(location.search).get('t'),JSON.stringify({t:video.currentTime,d:video.duration}))}catch(e){}});
+  // Keyboard: ←/→ seek ±10s, ↑/↓ volume, F fullscreen, M mute; dblclick = fullscreen
+  document.addEventListener('keydown',(e)=>{
+    if(e.target&&e.target.tagName==='INPUT')return;
+    switch(e.key){
+      case 'ArrowLeft':video.currentTime=Math.max(0,video.currentTime-10);e.preventDefault();break;
+      case 'ArrowRight':video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);e.preventDefault();break;
+      case 'ArrowUp':video.volume=Math.min(1,video.volume+0.1);e.preventDefault();break;
+      case 'ArrowDown':video.volume=Math.max(0,video.volume-0.1);e.preventDefault();break;
+      case 'f':case 'F':document.fullscreenElement?document.exitFullscreen():video.requestFullscreen();break;
+      case 'm':case 'M':video.muted=!video.muted;break;
+    }
+  });
+  video.addEventListener('dblclick',()=>{document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
   // ── Timeline strip: progress fill, buffered range, hover thumbnails ──
   // A hidden second video element renders frames for the preview bubble.
   const seekbar=document.getElementById('seekbar');

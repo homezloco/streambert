@@ -305,9 +305,24 @@ export default function AdultPage() {
 
   // browse state
   const [cat, setCat] = useState(null);
-  const [order, setOrder] = useState("top-weekly");
-  const [dur, setDur] = useState("");
-  const [minRate, setMinRate] = useState("");
+  // Persisted browse filters — coming back keeps your sort/length/rating
+  const [order, _setOrder] = useState(
+    () => storage.get("adultOrder") || "top-weekly",
+  );
+  const setOrder = (v) => {
+    storage.set("adultOrder", v);
+    _setOrder(v);
+  };
+  const [dur, _setDur] = useState(() => storage.get("adultDur") || "");
+  const setDur = (v) => {
+    storage.set("adultDur", v);
+    _setDur(v);
+  };
+  const [minRate, _setMinRate] = useState(() => storage.get("adultRate") || "");
+  const setMinRate = (v) => {
+    storage.set("adultRate", v);
+    _setMinRate(v);
+  };
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const [gay, setGay] = useState(false);
@@ -753,6 +768,16 @@ export default function AdultPage() {
               onClick={() => webviewRef.current?.reload()}
             >
               ⟳
+            </button>
+            <button
+              className="browse-tab"
+              title="Back to site home"
+              onClick={() => {
+                const wv = webviewRef.current;
+                if (wv) wv.src = current.url;
+              }}
+            >
+              ⌂
             </button>
             <button
               className="browse-tab"
