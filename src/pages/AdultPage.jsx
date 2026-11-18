@@ -1021,11 +1021,23 @@ export default function AdultPage() {
               {recents.map((r) => (
                 <button
                   key={r.id}
-                  className="browse-chip"
+                  className="browse-chip recent-chip"
                   title={r.title}
                   onClick={() => setPlaying(r)}
                 >
                   {r.title.length > 36 ? r.title.slice(0, 36) + "…" : r.title}
+                  <span
+                    className="recent-x"
+                    title="Remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = recents.filter((x) => x.id !== r.id);
+                      setRecents(next);
+                      storage.set("adultRecents", next);
+                    }}
+                  >
+                    ✕
+                  </span>
                 </button>
               ))}
               <button

@@ -554,6 +554,20 @@ select option {
     outline: none;
     border-color: var(--red);
 }
+.recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.recent-x {
+    font-size: 10px;
+    color: var(--text3);
+    opacity: 0.5;
+}
+.recent-x:hover {
+    opacity: 1;
+    color: var(--red);
+}
 
 /* Webview back/forward/reload controls */
 .webview-nav {

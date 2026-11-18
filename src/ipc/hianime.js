@@ -612,11 +612,18 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
 #seekfill{position:absolute;left:0;top:0;bottom:0;width:0;background:#ff4d4d}
 #thumb{position:absolute;bottom:20px;transform:translateX(-50%);background:#000;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px;display:none;pointer-events:none;z-index:25}
 #thumb canvas{display:block;width:160px;height:90px;background:#111}
-#ttime{text-align:center;font:12px system-ui,sans-serif;color:#fff;padding-top:3px}</style>
+#ttime{text-align:center;font:12px system-ui,sans-serif;color:#fff;padding-top:3px}
+#help{position:absolute;top:16px;right:16px;z-index:30;background:rgba(15,15,15,.92);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:12px 16px;font:13px/1.8 system-ui,sans-serif;color:#eee}
+#help b{color:#ff4d4d;display:block;margin-bottom:4px}
+#help span{color:#999}</style>
 </head><body>
 <video id="v" controls playsinline autoplay>${track}</video>
 <div id="seekbar"><div class="rail"><div id="seekbuf"></div><div id="seekfill"></div></div><div id="thumb"><canvas id="tc" width="160" height="90"></canvas><div id="ttime"></div></div></div>
 <button id="gear" title="Quality & speed">&#9881;</button>
+<div id="help" hidden><b>Shortcuts</b>
+<span>&larr;/&rarr;</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
+<span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
+<span>,</span>/<span>.</span> frame step &nbsp;<span>?</span> this help</div>
 <div id="menu" hidden>
   <div class="sec" id="qsec">Quality</div>
   <div id="levels"></div>
@@ -666,7 +673,19 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
       case '.':video.pause();video.currentTime=Math.min(video.duration||Infinity,video.currentTime+1/30);break;
     }
   });
-  video.addEventListener('dblclick',()=>{document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
+  // Click toggles play/pause (250ms delay so dblclick→fullscreen wins);
+  // dblclick = fullscreen
+  let clickT=null;
+  video.addEventListener('click',()=>{clearTimeout(clickT);clickT=setTimeout(()=>{video.paused?video.play():video.pause()},250)});
+  video.addEventListener('dblclick',()=>{clearTimeout(clickT);document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
+  // ? or H shows a shortcut cheat-sheet; any key/click hides it
+  const help=document.getElementById('help');
+  const toggleHelp=()=>{help.hidden=!help.hidden;};
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='?'||e.key==='h'||e.key==='H'){toggleHelp();return;}
+    if(!help.hidden)help.hidden=true;
+  });
+  document.addEventListener('click',()=>{if(!help.hidden)help.hidden=true;});
   // ── Timeline strip: progress fill, buffered range, hover thumbnails ──
   // A hidden second video element renders frames for the preview bubble.
   const seekbar=document.getElementById('seekbar');

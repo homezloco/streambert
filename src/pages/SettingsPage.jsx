@@ -2545,6 +2545,7 @@ function NetworkSection() {
   const [cleared, setCleared] = useState(false);
   const [blockStats, setBlockStats] = useState(null);
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [resumed, setResumed] = useState(false);
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
@@ -2799,6 +2800,28 @@ function NetworkSection() {
         >
           Clear player session data
         </button>
+        <button
+          className="btn btn-secondary"
+          title="Forget all saved resume points (downloads + adult streams) and the adult recents list"
+          onClick={() => {
+            if (!confirm("Clear all saved watch positions and recents?"))
+              return;
+            for (const k of Object.keys(localStorage)) {
+              if (
+                k.startsWith("streambert_dlTime_") ||
+                k.startsWith("streambert_adultResume_")
+              )
+                localStorage.removeItem(k);
+            }
+            storage.set("adultRecents", []);
+            setResumed(true);
+          }}
+        >
+          Clear resume points
+        </button>
+        {resumed && (
+          <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Cleared</span>
+        )}
         {cleared && (
           <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Cleared</span>
         )}
