@@ -536,6 +536,24 @@ select option {
     padding: 6px 10px;
     font-size: 12px;
 }
+.find-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.find-input {
+    width: 150px;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+}
+.find-input:focus {
+    outline: none;
+    border-color: var(--red);
+}
 
 /* Webview back/forward/reload controls */
 .webview-nav {

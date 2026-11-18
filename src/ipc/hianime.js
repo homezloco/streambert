@@ -622,6 +622,8 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   <div id="levels"></div>
   <div class="sec" id="ssec" hidden>Subtitles</div>
   <div id="subs"></div>
+  <div class="sec">Playback</div>
+  <div id="playopts"></div>
   <div class="sec">Speed</div>
   <div id="speeds"></div>
 </div>
@@ -803,6 +805,12 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
     SUB_LABELS.forEach((l,i)=>mkSub(l,i));
     setTrack(0);
   }
+  // Loop toggle — handy for short clips
+  const playOpts=document.getElementById('playopts');
+  const loopBtn=document.createElement('button');
+  loopBtn.textContent='Loop';
+  loopBtn.onclick=()=>{video.loop=!video.loop;loopBtn.classList.toggle('on',video.loop);menu.hidden=true;};
+  playOpts.appendChild(loopBtn);
   function buildLevels(hls){
     // Auto first, then real levels sorted best→worst
     const items=[{label:'Auto',idx:-1}].concat(

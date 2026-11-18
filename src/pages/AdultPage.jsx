@@ -500,6 +500,28 @@ export default function AdultPage() {
     return () => clearInterval(t);
   }, []);
 
+  // ── Find-in-page: search text inside the embedded site ──
+  const [findOpen, setFindOpen] = useState(false);
+  const [findText, setFindText] = useState("");
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv?.findInPage) return;
+    const t = setTimeout(() => {
+      try {
+        if (findOpen && findText) wv.findInPage(findText);
+        else wv.stopFindInPage("clearSelection");
+      } catch {}
+    }, 250);
+    return () => clearTimeout(t);
+  }, [findText, findOpen]);
+  const findStep = (forward) => {
+    const wv = webviewRef.current;
+    if (!wv?.findInPage || !findText) return;
+    try {
+      wv.findInPage(findText, { findNext: true, forward });
+    } catch {}
+  };
+
   // Copy the captured stream URL (for pasting into an external player)
   const copyStream = async () => {
     if (!siteStream) return;
@@ -845,6 +867,48 @@ export default function AdultPage() {
             >
               ↗
             </button>
+            <button
+              className={`browse-tab${findOpen ? " browse-tab--active" : ""}`}
+              title="Find in page"
+              onClick={() => {
+                setFindOpen((o) => !o);
+                if (findOpen) setFindText("");
+              }}
+            >
+              ⌕
+            </button>
+            {findOpen && (
+              <span className="find-bar">
+                <input
+                  className="find-input"
+                  placeholder="Find…"
+                  autoFocus
+                  value={findText}
+                  onChange={(e) => setFindText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") findStep(!e.shiftKey);
+                    if (e.key === "Escape") {
+                      setFindText("");
+                      setFindOpen(false);
+                    }
+                  }}
+                />
+                <button
+                  className="browse-tab"
+                  title="Previous match"
+                  onClick={() => findStep(false)}
+                >
+                  ↑
+                </button>
+                <button
+                  className="browse-tab"
+                  title="Next match"
+                  onClick={() => findStep(true)}
+                >
+                  ↓
+                </button>
+              </span>
+            )}
           </div>
         )}
         {mode === "browse" && (
