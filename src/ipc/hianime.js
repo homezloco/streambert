@@ -645,8 +645,9 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   if(svRate>=0.25&&svRate<=4)video.playbackRate=svRate;
   const svVol=parseFloat(ck('sb_vol'));
   if(svVol>=0&&svVol<=1)video.volume=svVol;
+  if(ck('sb_muted')==='1')video.muted=true;
   video.addEventListener('ratechange',()=>{document.cookie='sb_rate='+video.playbackRate+';path=/;max-age=31536000'});
-  video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000'});
+  video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000';document.cookie='sb_muted='+(video.muted?1:0)+';path=/;max-age=31536000'});
   // Report position back so the app can offer resume on the next open
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
