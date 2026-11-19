@@ -633,8 +633,13 @@ video::cue{font-size:var(--cuesz,1.15em)}
   <div id="levels"></div>
   <div class="sec" id="ssec" hidden>Subtitles</div>
   <div id="subs"></div>
+  <div class="sec" id="asec" hidden>Audio</div>
+  <div id="atracks"></div>
   <div class="sec">Playback</div>
   <div id="playopts"></div>
+  <div class="sec">Sleep timer</div>
+  <div id="sleepopts"></div>
+  <div id="sleepinfo" style="padding:2px 10px 4px;font-size:11px;color:#999"></div>
   <div class="sec">Speed</div>
   <div id="speeds"></div>
 </div>
@@ -863,6 +868,35 @@ video::cue{font-size:var(--cuesz,1.15em)}
   };
   pipBtn.addEventListener('click',(e)=>{e.stopPropagation();togglePip();});
   if(document.pictureInPictureEnabled===false)pipBtn.style.display='none';
+  // Sleep timer — pause playback after N minutes
+  const sleepBox=document.getElementById('sleepopts');
+  const sleepInfo=document.getElementById('sleepinfo');
+  let sleepT=null,sleepIv=null,sleepEnd=0;
+  const paintSleep=()=>{
+    const left=sleepEnd?Math.max(0,Math.ceil((sleepEnd-Date.now())/60000)):0;
+    sleepInfo.textContent=left?('Sleeping in '+left+' min'):'';
+  };
+  const setSleep=(mins)=>{
+    clearTimeout(sleepT);clearInterval(sleepIv);sleepT=sleepIv=null;sleepEnd=0;
+    if(mins>0){
+      sleepEnd=Date.now()+mins*60000;
+      sleepT=setTimeout(()=>{
+        video.pause();setSleep(0);
+        [...sleepBox.children].forEach(x=>x.classList.remove('on'));
+      },mins*60000);
+      sleepIv=setInterval(paintSleep,15000);paintSleep();
+    }else paintSleep();
+  };
+  [['Off',0],['15m',15],['30m',30],['45m',45],['60m',60]].forEach(([l,m])=>{
+    const b=document.createElement('button');b.textContent=l;
+    b.onclick=()=>{
+      setSleep(m);
+      [...sleepBox.children].forEach(x=>x.classList.remove('on'));
+      if(m>0)b.classList.add('on');
+      menu.hidden=true;
+    };
+    sleepBox.appendChild(b);
+  });
   function buildLevels(hls){
     // Auto first, then real levels sorted best→worst
     const items=[{label:'Auto',idx:-1}].concat(
@@ -904,6 +938,20 @@ video::cue{font-size:var(--cuesz,1.15em)}
       if(tracks.length&&hls.audioTrack===-1){
         const def=tracks.findIndex(t=>t.default);
         hls.audioTrack=def>=0?def:0;
+      }
+      // Surface multi-audio streams (dubs/languages) in the gear menu
+      if(tracks.length>1){
+        const asec=document.getElementById('asec');
+        const atracks=document.getElementById('atracks');
+        asec.hidden=false;atracks.innerHTML='';
+        const paintA=()=>{[...atracks.children].forEach((b,k)=>b.classList.toggle('on',k===hls.audioTrack));};
+        tracks.forEach((t,i)=>{
+          const b=document.createElement('button');
+          b.textContent=t.name||t.lang||('Audio '+(i+1));
+          b.onclick=()=>{hls.audioTrack=i;paintA();};
+          atracks.appendChild(b);
+        });
+        paintA();
       }
     });
     hls.on(Hls.Events.MANIFEST_PARSED,()=>{

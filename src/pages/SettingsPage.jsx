@@ -7,8 +7,13 @@ import {
   secureStorage,
   isElectron,
   clearAppCaches,
+  getSourceStats,
 } from "../utils/storage";
-import { clearTmdbCache, CINEMETA_KEY } from "../utils/api";
+import {
+  clearTmdbCache,
+  CINEMETA_KEY,
+  PLAYER_SOURCES,
+} from "../utils/api";
 import {
   ACCENT_PRESETS,
   applyAccentColor,
@@ -3734,6 +3739,7 @@ export default function SettingsPage({
     return v === null || v === undefined ? "" : String(v);
   });
   const [ageSaved, setAgeSaved] = useState(false);
+  const [, setSrcStatsVersion] = useState(0); // bump to re-render source stats
 
   const saveAgeSettings = () => {
     storage.set(STORAGE_KEYS.RATING_COUNTRY, ratingCountry);
@@ -4088,7 +4094,7 @@ export default function SettingsPage({
                 />
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <button className="btn btn-primary" onClick={saveAgeSettings}>
                   Save
                 </button>
@@ -4097,6 +4103,41 @@ export default function SettingsPage({
                     ✓ Saved
                   </span>
                 )}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: 12, color: "var(--text3)" }}>
+                  Quick presets:
+                </span>
+                {[
+                  { label: "Off", lim: "" },
+                  { label: "Kids (G/PG)", lim: "7" },
+                  { label: "Teens (PG-13)", lim: "13" },
+                  { label: "Adults (18+)", lim: "18" },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    className={`btn btn-ghost${ageLimit === p.lim && ratingCountry === "US" ? " active" : ""}`}
+                    style={{ padding: "4px 12px", fontSize: 12 }}
+                    onClick={() => {
+                      setRatingCountry("US");
+                      setAgeLimit(p.lim);
+                      storage.set(STORAGE_KEYS.RATING_COUNTRY, "US");
+                      if (p.lim === "") storage.remove(STORAGE_KEYS.AGE_LIMIT);
+                      else storage.set(STORAGE_KEYS.AGE_LIMIT, Number(p.lim));
+                      setAgeSaved(true);
+                      setTimeout(() => setAgeSaved(false), 2000);
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -4530,6 +4571,95 @@ export default function SettingsPage({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Source reliability — learned from actual plays */}
+          <div>
+            <div className="settings-section-title">Source Reliability</div>
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--text3)",
+                marginBottom: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              Learned automatically: a source counts as working when a play
+              produced a stream, and failed when nothing playable arrived.
+              These scores drive failover ordering.
+            </div>
+            {(() => {
+              const stats = getSourceStats();
+              const rows = PLAYER_SOURCES.filter((s) => stats[s.id])
+                .map((s) => {
+                  const st = stats[s.id];
+                  const total = (st.ok || 0) + (st.fail || 0);
+                  return {
+                    s,
+                    total,
+                    pct: total ? Math.round((st.ok / total) * 100) : 0,
+                  };
+                })
+                .sort((a, b) => b.pct - a.pct || b.total - a.total);
+              if (!rows.length)
+                return (
+                  <div style={{ fontSize: 13, color: "var(--text3)" }}>
+                    No plays recorded yet — stats build up as you watch.
+                  </div>
+                );
+              return (
+                <>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(200px, 1fr))",
+                      gap: 8,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {rows.map(({ s, total, pct }) => (
+                      <div
+                        key={s.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          background: "var(--surface2)",
+                          borderRadius: 6,
+                          padding: "6px 10px",
+                          fontSize: 12,
+                        }}
+                      >
+                        <span style={{ color: "var(--text1)" }}>{s.label}</span>
+                        <span
+                          style={{
+                            color:
+                              pct >= 70
+                                ? "#48c774"
+                                : pct >= 40
+                                  ? "#e8b33e"
+                                  : "#ff5d5d",
+                          }}
+                        >
+                          {pct}% · {total}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12 }}
+                    onClick={() => {
+                      storage.remove(STORAGE_KEYS.SOURCE_STATS);
+                      setSrcStatsVersion((v) => v + 1);
+                    }}
+                  >
+                    Reset reliability stats
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
 
