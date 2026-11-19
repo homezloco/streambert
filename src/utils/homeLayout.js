@@ -5,6 +5,7 @@ import { storage } from "./storage";
 
 export const HOME_ROWS = [
   { id: "continue", label: "Continue Watching" },
+  { id: "watchAgain", label: "Watch Again" },
   { id: "recommended", label: "Recommended for You" },
   { id: "trendingMovies", label: "Trending Movies" },
   { id: "trendingTV", label: "Trending Series" },

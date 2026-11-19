@@ -164,6 +164,28 @@ export default function HomePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, offline, history?.length]);
 
+  // "Watch Again": deduped history entries the user has already finished —
+  // the movie/title watched key is set, or (for series) any episode was
+  // watched. Newest-first, capped like the other rows.
+  const watchAgainItems = useMemo(() => {
+    const seen = new Set();
+    const w = watched || {};
+    return (history || [])
+      .filter((h) => {
+        const type = h.media_type === "tv" ? "tv" : "movie";
+        const tk = `${type}_${h.id}`;
+        if (seen.has(tk)) return false;
+        const done =
+          !!w[tk] ||
+          (type === "tv" &&
+            Object.keys(w).some((k) => k.startsWith(`${tk}_s`)));
+        if (!done) return false;
+        seen.add(tk);
+        return true;
+      })
+      .slice(0, 12);
+  }, [history, watched]);
+
   // Fetch top rated movies + TV, merge and shuffle
   useEffect(() => {
     if (!apiKey || offline) return;
@@ -360,6 +382,26 @@ export default function HomePage({
             </div>
           );
         };
+
+        if (id === "watchAgain") {
+          if (watchAgainItems.length === 0) return null;
+          if (viewMode === "list")
+            return renderList(
+              "watchAgain",
+              "Watch Again",
+              null,
+              watchAgainItems,
+            );
+          return (
+            <TrendingCarousel
+              key="watchAgain"
+              items={watchAgainItems}
+              title="Watch Again"
+              onSelect={onSelect}
+              ratingsMap={enrichedRatingsMap}
+            />
+          );
+        }
 
         if (id === "recommended") {
           if (filteredRecommendedItems.length === 0) return null;

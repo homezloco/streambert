@@ -45,6 +45,13 @@ export default function BrowsePage({
     _setHideWatched(v);
   };
   const [items, setItems] = useState([]);
+  // Text search — overrides catalog browsing when non-empty
+  const [searchText, setSearchText] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(searchText.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchText]);
   const [pageNum, setPageNum] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -56,13 +63,36 @@ export default function BrowsePage({
     setItems([]);
     setPageNum(1);
     setHasMore(true);
-  }, [type, sort, genre]);
+  }, [type, sort, genre, query]);
 
   // Page fetch. Cinemeta genre catalogs don't paginate server-side, so a
-  // short/empty second page simply ends the list.
+  // short/empty second page simply ends the list. Text search goes through
+  // /search (works keyless via Cinemeta search catalogs) and is single-page.
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    if (query) {
+      if (pageNum > 1) {
+        setLoading(false);
+        return;
+      }
+      tmdbFetch(
+        `/search/${type}?query=${encodeURIComponent(query)}`,
+        apiKey,
+      )
+        .then((d) => {
+          if (!mounted) return;
+          setItems(
+            (d?.results || []).map((i) => ({ ...i, media_type: type })),
+          );
+          setHasMore(false);
+        })
+        .catch(() => {
+          if (mounted) setItems([]);
+        })
+        .finally(() => mounted && setLoading(false));
+      return;
+    }
     const qs = new URLSearchParams({ sort_by: sort, page: String(pageNum) });
     if (genre) qs.set("with_genres", String(genre));
     tmdbFetch(`/discover/${type}?${qs.toString()}`, apiKey)
@@ -91,7 +121,7 @@ export default function BrowsePage({
     return () => {
       mounted = false;
     };
-  }, [type, sort, genre, pageNum, apiKey]);
+  }, [type, sort, genre, query, pageNum, apiKey]);
 
   const { ratingsMap, ageLimitSetting } = useRatings(items);
 
@@ -174,10 +204,19 @@ export default function BrowsePage({
               </button>
             ))}
           </div>
+          <input
+            className="site-filter"
+            style={{ width: 150 }}
+            placeholder={`Search ${type === "tv" ? "series" : "movies"}…`}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
           <select
             className="browse-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value)}
+            disabled={!!query}
+            title={query ? "Sorting is disabled while searching" : undefined}
           >
             {SORTS.map((s) => (
               <option key={s.id} value={s.id}>
