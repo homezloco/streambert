@@ -201,7 +201,7 @@ function SiteTabs({ list, selected, onSelect, favs, onToggleFav, filter, onFilte
   );
 }
 
-function AdultCard({ v, onPlay }) {
+function AdultCard({ v, onPlay, seen }) {
   const thumbs =
     v.thumbs?.length > 0
       ? v.thumbs.map((t) => t.src)
@@ -232,6 +232,7 @@ function AdultCard({ v, onPlay }) {
       <div className="adult-card__thumb">
         {thumbs[0] && <img src={thumbs[idx]} alt="" loading="lazy" />}
         {v.length_min && <span className="adult-card__dur">{v.length_min}</span>}
+        {seen && <span className="adult-card__seen">✓</span>}
       </div>
       <div className="adult-card__title" title={v.title}>
         {v.title}
@@ -511,6 +512,23 @@ export default function AdultPage() {
   // ── Find-in-page: search text inside the embedded site ──
   const [findOpen, setFindOpen] = useState(false);
   const [findText, setFindText] = useState("");
+  const [findResult, setFindResult] = useState(null); // {n, m}
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const onFound = (e) => {
+      if (e.result?.finalUpdate)
+        setFindResult({
+          n: e.result.activeMatchOrdinal,
+          m: e.result.matches,
+        });
+    };
+    wv.addEventListener("found-in-page", onFound);
+    return () => wv.removeEventListener("found-in-page", onFound);
+  });
+  useEffect(() => {
+    if (!findText) setFindResult(null);
+  }, [findText]);
   useEffect(() => {
     const wv = webviewRef.current;
     if (!wv?.findInPage) return;
@@ -901,6 +919,11 @@ export default function AdultPage() {
                     }
                   }}
                 />
+                {findResult && (
+                  <span className="find-count">
+                    {findResult.m ? `${findResult.n}/${findResult.m}` : "0/0"}
+                  </span>
+                )}
                 <button
                   className="browse-tab"
                   title="Previous match"
@@ -1078,7 +1101,12 @@ export default function AdultPage() {
 
           <div className="adult-grid">
             {videos.map((v) => (
-              <AdultCard key={v.id} v={v} onPlay={() => setPlaying(v)} />
+              <AdultCard
+                key={v.id}
+                v={v}
+                seen={recents.some((r) => r.id === v.id)}
+                onPlay={() => setPlaying(v)}
+              />
             ))}
           </div>
 

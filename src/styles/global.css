@@ -568,6 +568,12 @@ select option {
     opacity: 1;
     color: var(--red);
 }
+.find-count {
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 30px;
+    text-align: center;
+}
 
 /* Webview back/forward/reload controls */
 .webview-nav {
@@ -704,6 +710,17 @@ select option {
     height: 100%;
     object-fit: cover;
     display: block;
+}
+.adult-card__seen {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #4caf50;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
 }
 .adult-card__dur {
     position: absolute;

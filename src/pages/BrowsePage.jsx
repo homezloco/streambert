@@ -14,6 +14,15 @@ const SORTS = [
 const itemYear = (i) =>
   parseInt((i.release_date || i.first_air_date || "").slice(0, 4)) || 0;
 
+const DECADES = [
+  { id: "", label: "Any decade" },
+  { id: "2020s", label: "2020s", min: 2020, max: 2029 },
+  { id: "2010s", label: "2010s", min: 2010, max: 2019 },
+  { id: "2000s", label: "2000s", min: 2000, max: 2009 },
+  { id: "1990s", label: "1990s", min: 1990, max: 1999 },
+  { id: "old", label: "Pre-1990", min: 0, max: 1989 },
+];
+
 export default function BrowsePage({
   apiKey,
   onSelect,
@@ -25,6 +34,7 @@ export default function BrowsePage({
   const [type, setType] = useState(initial?.type === "tv" ? "tv" : "movie");
   const [sort, setSort] = useState(initial?.sort || "popularity.desc");
   const [genre, setGenre] = useState(initial?.genre || null);
+  const [decade, setDecade] = useState("");
   const [items, setItems] = useState([]);
   const [pageNum, setPageNum] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -102,6 +112,19 @@ export default function BrowsePage({
     return () => obs.disconnect();
   }, [hasMore, loading]);
 
+  // Client-side decade filter (no server-side year range in Cinemeta)
+  const decadeRange = DECADES.find((d) => d.id === decade);
+  const shown = useMemo(
+    () =>
+      decadeRange
+        ? items.filter((i) => {
+            const y = itemYear(i);
+            return y >= decadeRange.min && y <= decadeRange.max;
+          })
+        : items,
+    [items, decadeRange],
+  );
+
   const enrichedRatingsMap = useMemo(() => {
     const out = {};
     for (const [k, v] of Object.entries(ratingsMap)) {
@@ -142,6 +165,17 @@ export default function BrowsePage({
             {SORTS.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="browse-sort"
+            value={decade}
+            onChange={(e) => setDecade(e.target.value)}
+          >
+            {DECADES.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
               </option>
             ))}
           </select>
@@ -186,7 +220,7 @@ export default function BrowsePage({
         )}
 
         <div className="cards-grid">
-          {items.map((item) => {
+          {shown.map((item) => {
             const rk = `${type}_${item.id}`;
             const rd = enrichedRatingsMap[rk] || {};
             const r = getRating(item);

@@ -77,6 +77,7 @@ const SORT_OPTIONS = [
   { value: "name", label: "Name" },
   { value: "size", label: "Size" },
   { value: "type", label: "Type" },
+  { value: "recent", label: "Watched" },
 ];
 
 export default function DownloadsPage({
@@ -219,6 +220,10 @@ export default function DownloadsPage({
       if (sortBy === "size") cmp = parseSize(a.size) - parseSize(b.size);
       if (sortBy === "type")
         cmp = (a.mediaType || "local").localeCompare(b.mediaType || "local");
+      if (sortBy === "recent")
+        cmp =
+          (storage.get("dlSeen_" + dlWatchedKey(a)) || 0) -
+          (storage.get("dlSeen_" + dlWatchedKey(b)) || 0);
       return sortDir === "desc" ? -cmp : cmp;
     });
   }, [allLocalItemsRaw, showUntracked, searchQuery, sortBy, sortDir]);
@@ -238,7 +243,10 @@ export default function DownloadsPage({
       setLiveProgress((prev) => ({ ...prev, [p.filePath]: p.seconds }));
       const dl = itemsRef.current.find((x) => x.filePath === p.filePath);
       const wk = dl && dlWatchedKey(dl);
-      if (wk) storage.set(PROGRESS_TIME_PREFIX + wk, p.seconds);
+      if (wk) {
+        storage.set(PROGRESS_TIME_PREFIX + wk, p.seconds);
+        storage.set("dlSeen_" + wk, Date.now());
+      }
     };
     window.electron.onLocalPlayProgress(h);
     return () => window.electron.offLocalPlayProgress?.(h);
