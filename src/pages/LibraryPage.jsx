@@ -33,6 +33,23 @@ export default function LibraryPage({
       window.removeEventListener("streambert:library-sort-changed", handler);
   }, []);
 
+  // Per-section view sorts (persisted locally)
+  const [savedSort, setSavedSort] = useState(
+    () => storage.get("libSavedSort") || "added",
+  );
+  const [historySort, setHistorySort] = useState(
+    () => storage.get("libHistorySort") || "recent",
+  );
+
+  const changeSavedSort = (e) => {
+    setSavedSort(e.target.value);
+    storage.set("libSavedSort", e.target.value);
+  };
+  const changeHistorySort = (e) => {
+    setHistorySort(e.target.value);
+    storage.set("libHistorySort", e.target.value);
+  };
+
   const sortLabels = {
     manual: "Custom order",
     title: "A-Z",
@@ -48,6 +65,31 @@ export default function LibraryPage({
     (item) => isRestricted(getRating(item).minAge, ageLimitSetting),
     [getRating, ageLimitSetting],
   );
+
+  const itemYear = (item) =>
+    String(item.release_date || item.first_air_date || item.year || "").slice(
+      0,
+      4,
+    );
+  const itemTitle = (item) => item.title || item.name || "";
+
+  const sortedSaved = useMemo(() => {
+    if (savedSort === "title")
+      return [...saved].sort((a, b) => itemTitle(a).localeCompare(itemTitle(b)));
+    if (savedSort === "newest")
+      return [...saved].sort((a, b) => itemYear(b).localeCompare(itemYear(a)));
+    if (savedSort === "oldest")
+      return [...saved].sort((a, b) => itemYear(a).localeCompare(itemYear(b)));
+    return saved;
+  }, [saved, savedSort]);
+
+  const sortedHistory = useMemo(() => {
+    if (historySort === "title")
+      return [...history].sort((a, b) =>
+        itemTitle(a).localeCompare(itemTitle(b)),
+      );
+    return history; // "recent" — already newest-first
+  }, [history, historySort]);
 
   return (
     <div className="fade-in">
@@ -103,9 +145,19 @@ export default function LibraryPage({
                 {sortLabels[sort]}
               </span>
             )}
+            <select
+              className="browse-sort library-sort"
+              value={savedSort}
+              onChange={changeSavedSort}
+            >
+              <option value="added">Added</option>
+              <option value="title">Title A–Z</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
           </div>
           <div className="cards-grid">
-            {saved.map((item) => {
+            {sortedSaved.map((item) => {
               const r = getRating(item);
               const restr = itemRestricted(item);
               return (
@@ -127,9 +179,19 @@ export default function LibraryPage({
 
       {history.length > 0 && (
         <div className="library-section">
-          <div className="library-section-title">Watch History</div>
+          <div className="library-section-title">
+            Watch History
+            <select
+              className="browse-sort library-sort"
+              value={historySort}
+              onChange={changeHistorySort}
+            >
+              <option value="recent">Recent</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </div>
           <div className="history-rows">
-            {history.map((item, i) => {
+            {sortedHistory.map((item, i) => {
               const pk =
                 item.media_type === "movie"
                   ? `movie_${item.id}`

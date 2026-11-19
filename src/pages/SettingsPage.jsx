@@ -2554,6 +2554,10 @@ function NetworkSection() {
   const [resumed, setResumed] = useState(false);
   const [adultPin, setAdultPin] = useState("");
   const [hasPin, setHasPin] = useState(() => !!storage.get("adultPinHash"));
+  const [appPin, setAppPin] = useState("");
+  const [hasAppPin, setHasAppPin] = useState(
+    () => !!storage.get("appPinHash"),
+  );
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
@@ -2793,6 +2797,74 @@ function NetworkSection() {
           )}
         </>
       )}
+
+      <div className="settings-section-title">App lock &amp; panic button</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        Require a PIN every time Streambert launches — independent of the 18+
+        section PIN. Press{" "}
+        <strong style={{ color: "var(--text2)" }}>Ctrl+Shift+X</strong> at any
+        time to instantly hide and mute the window; press it again to bring it
+        back. Unlocking lasts until the app is closed.
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 24,
+        }}
+      >
+        <input
+          type="password"
+          inputMode="numeric"
+          placeholder={hasAppPin ? "New app PIN" : "App lock PIN"}
+          value={appPin}
+          onChange={(e) => setAppPin(e.target.value)}
+          style={{
+            background: "var(--surface2)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            color: "var(--text1)",
+            padding: "7px 10px",
+            fontSize: 13,
+            width: 110,
+          }}
+          title="Require a PIN to open Streambert"
+        />
+        <button
+          className="btn btn-secondary"
+          disabled={!appPin.trim()}
+          title="Require a PIN to open Streambert (relocks every app launch)"
+          onClick={async () => {
+            storage.set("appPinHash", await hashPin(appPin.trim()));
+            sessionStorage.removeItem("appUnlocked");
+            setAppPin("");
+            setHasAppPin(true);
+          }}
+        >
+          {hasAppPin ? "Change PIN" : "Set PIN"}
+        </button>
+        {hasAppPin && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              storage.remove("appPinHash");
+              sessionStorage.removeItem("appUnlocked");
+              setHasAppPin(false);
+            }}
+          >
+            Remove PIN
+          </button>
+        )}
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button className="btn btn-primary" onClick={save}>

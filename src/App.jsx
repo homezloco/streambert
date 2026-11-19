@@ -10,7 +10,13 @@ import {
 import ErrorBoundary from "./components/ErrorBoundary";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import WindowTitlebar from "./components/WindowTitlebar";
-import { storage, secureStorage, STORAGE_KEYS } from "./utils/storage";
+import { WarningIcon } from "./components/Icons";
+import {
+  storage,
+  secureStorage,
+  STORAGE_KEYS,
+  hashPin,
+} from "./utils/storage";
 import {
   applyAccentColor,
   applyTheme,
@@ -80,6 +86,16 @@ export default function App() {
   );
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [platform, setPlatform] = useState(null);
+
+  // ── App-wide PIN lock (Settings → Privacy & Network, key "appPinHash") ──
+  // Independent of the 18+ section PIN. The unlock lasts for this window
+  // session only (sessionStorage), so relaunching the app re-locks.
+  const [appPinHash] = useState(() => storage.get("appPinHash") || null);
+  const [appUnlocked, setAppUnlocked] = useState(
+    () => sessionStorage.getItem("appUnlocked") === "1",
+  );
+  const [appPinVal, setAppPinVal] = useState("");
+  const [appPinErr, setAppPinErr] = useState(false);
 
   // Drag-and-drop local file playback (see handleFileDrop below)
   const [dropActive, setDropActive] = useState(false);
@@ -715,6 +731,19 @@ export default function App() {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
+      // Panic chord: hide + mute the window. The main process also registers
+      // this as a globalShortcut; the listener is the fallback for when the
+      // OS owns the chord. No-op once hidden (window loses focus anyway).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        !e.altKey && // AltGr on some layouts = Ctrl+Alt — don't panic on typing
+        e.key.toLowerCase() === "x"
+      ) {
+        e.preventDefault();
+        window.electron?.panic?.();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
         e.preventDefault();
         setShowSearch(true);
@@ -1056,6 +1085,58 @@ export default function App() {
     },
     [navigate],
   );
+
+  // App-wide PIN lock gates EVERYTHING — including first-run setup. Nothing
+  // private (library, history, adult section, API onboarding) renders before
+  // the correct PIN has unlocked this window session.
+  if (appPinHash && !appUnlocked) {
+    return (
+      <ErrorBoundary>
+        <div className="adult-gate fade-in" style={{ minHeight: "100vh" }}>
+          <WarningIcon size={48} />
+          <h2>PIN required</h2>
+          <p>Streambert is locked. Enter your PIN to continue.</p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if ((await hashPin(appPinVal)) === appPinHash) {
+                sessionStorage.setItem("appUnlocked", "1");
+                setAppUnlocked(true);
+              } else {
+                setAppPinErr(true);
+                setAppPinVal("");
+              }
+            }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              alignItems: "center",
+            }}
+          >
+            <input
+              className="adult-search site-filter"
+              style={{ maxWidth: 180, textAlign: "center" }}
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              placeholder="PIN"
+              value={appPinVal}
+              onChange={(e) => setAppPinVal(e.target.value)}
+            />
+            {appPinErr && (
+              <span style={{ color: "var(--red)", fontSize: 13 }}>
+                Wrong PIN
+              </span>
+            )}
+            <button className="btn btn-primary" type="submit">
+              Unlock
+            </button>
+          </form>
+        </div>
+      </ErrorBoundary>
+    );
+  }
 
   if (!apiKeyLoaded) return null; // wait for secure storage to resolve
   if (!apiKey && !skipped)

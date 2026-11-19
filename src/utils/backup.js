@@ -53,6 +53,29 @@ export const BACKUP_KEYS = [
   "notifyNewEpisode",
   // Episode-release cache
   "episodeReleaseCache",
+  // Source reliability learning
+  "sourceStats",
+  "titleSources",
+  // Adult section preferences
+  "adultMode",
+  "adultOrder",
+  "adultDur",
+  "adultRate",
+  "adultGay",
+  "adultCat",
+  "adultHideSeen",
+  "adultGridSize",
+  "adultSite",
+  "adultImgSite",
+  "adultCreatorSite",
+  "adultSiteFavs",
+  "adultRecents",
+  // PIN hashes (only the SHA-256 digests are stored/exported, never PINs)
+  "adultPinHash",
+  "appPinHash",
+  // Library list sorting
+  "libSavedSort",
+  "libHistorySort",
 ];
 
 /**

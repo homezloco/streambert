@@ -19,7 +19,7 @@ AniSkip already covers anime. For general content: analyze audio for silence/the
 ### 1.4 Watch-party / LAN playhead sync
 Share position + play/pause between two Streambert instances (or one instance + TV browser from 1.1) over LAN. Broadcast position via WebSocket on the player server.
 
-### 1.5 Subtitle sync offset
+### ~~1.5 Subtitle sync offset~~ — DONE
 ± slider in the gear menu for mistimed tracks. Implementation: the `/sub` proxy route could parse the .vtt and shift cue timestamps by `?offset=`, or the player page re-times cues via `track.mode` + cue listeners. Medium complexity.
 
 ### 1.6 Custom speed presets
@@ -29,7 +29,7 @@ User-configurable speed list (e.g. 0.5/1/1.75/3) stored in settings; the gear me
 
 ## 2. Discovery & sources
 
-### 2.1 Cross-site adult search
+### ~~2.1 Cross-site adult search~~ — DONE
 Browse tab currently queries only Eporner. Add a "search everywhere" mode that fires the same query at multiple site APIs (Pornhub/xHamster/SpankBang have unofficial JSON endpoints; others need HTML scraping inside the hardened session) and merges results into one grid. Biggest content-coverage win on the adult side.
 
 - Needs a small per-site adapter (`{search(q,page) => items}`) like PLAYER_SOURCES but for search.
@@ -41,7 +41,7 @@ Continue probing: vidora, vidplus, vidzee, autoembed mirrors all failed last rou
 ### 2.3 ~~"Tonight" mode~~ — DONE
 🌙 Tonight button on Browse: random popular-catalog page, filters to 6.5+ vote average, picks one. Follow-up idea: runtime cap (<2h) needs per-item detail fetches — could batch-check if worth it.
 
-### 2.4 Watchlist improvements
+### ~~2.4 Watchlist improvements~~ — DONE
 - Sort saved items (date added / release / rating).
 - "Unreleased → released" notifications for saved upcoming titles.
 
@@ -71,10 +71,10 @@ Multiple concurrent downloads with pause/cancel and a queue view on DownloadsPag
 ### 4.2 Auto-prefetch next episode
 After starting episode N, quietly resolve episode N+1's embed and let the stream interceptor cache the manifest (small memory cost, near-instant next-episode). Must respect "don't disturb playback" — prefetch only network, no DOM swaps.
 
-### 4.3 Progress rings on posters
+### ~~4.3 Progress rings on posters~~ — DONE
 Small arc overlay on Library cards showing watched % (progress data already exists per id).
 
-### 4.4 Export/backup watch data
+### ~~4.4 Export/backup watch data~~ — DONE
 JSON export of history + progress + saved list (backup module exists — check if it already covers these keys; if so this is just a UI button).
 
 ---
@@ -87,10 +87,10 @@ Adult sites currently share `persist:player`. Per-site partitions (`persist:adul
 ### 5.2 Tor/proxy per-section routing
 Route adult-section traffic through a different proxy than regular. Electron `session.setProxy` is per-session, so this composes with 5.1.
 
-### 5.3 Panic button
+### ~~5.3 Panic button~~ — DONE
 Global hotkey (e.g. Ctrl+Shift+X) → instantly hide window + mute. Electron `globalShortcut`.
 
-### 5.4 App-wide PIN
+### ~~5.4 App-wide PIN~~ — DONE
 Extend the adult-section PIN gate (hashPin already in storage.js) to a launch gate covering the whole UI. Settings toggle + same lock-screen component.
 
 ---
@@ -121,3 +121,5 @@ S/M/L chips in the adult filter row, persisted as `adultGridSize` (200/280/360px
 - Native player: multi-track subs, quality/speed/volume/mute persistence, PiP, sleep timer, A-B repeat, fit toggle, snapshot, keyboard+frame-step controls, timeline thumbnails, resume + progress reporting.
 - Adult section: PIN gate, recents with keywords, "Recommended for you" row, seen badges, hide-seen, Surprise, downloads, native-swap, find-in-page, nav controls, per-site zoom.
 - UX: ScrollRow arrows, back-to-top FAB, skeleton loaders, sticky browse filters, read-more overviews, focus rings.
+- Plan batch 1: Play-on-TV LAN share (📺 button → QR page), per-title source memory, failover toast, drag-and-drop file playback, adult grid density, Tonight mode.
+- Plan batch 2: cross-site adult search (Eporner+Pornhub+RedTube merged), poster progress rings, watchlist/history sorting, panic button (Ctrl+Shift+X), app-wide PIN, subtitle sync offset, backup coverage for new keys.

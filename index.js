@@ -9,6 +9,7 @@ const {
   session,
   webContents,
   Notification,
+  globalShortcut,
 } = require("electron");
 const path = require("path");
 
@@ -920,6 +921,59 @@ ipcMain.on("player-stopped", () => {
   }
 });
 
+// -- Panic button --------------------------------------------------------------
+// Ctrl+Shift+X hides + mutes the main window instantly; pressing it again
+// restores and unmutes it (toggle). The renderer can also trigger the same
+// action via "panic-hide" so the chord works even when the OS swallows the
+// global shortcut registration.
+let panicHidden = false;
+
+// setAudioMuted on the host WebContents does not reach <webview> guests, so
+// the tracked player webviews are muted/unmuted alongside it — otherwise the
+// panic mute would leave embed audio playing.
+function setPlayerAudioMuted(muted) {
+  for (const id of playerWcIds) {
+    try {
+      const wc = webContents.fromId(id);
+      if (wc && !wc.isDestroyed()) wc.setAudioMuted(muted);
+    } catch {}
+  }
+}
+
+function panicToggle() {
+  const mw = mainWindow;
+  if (!mw || mw.isDestroyed()) return;
+  if (panicHidden || !mw.isVisible()) {
+    panicHidden = false;
+    if (mw.isMinimized()) mw.restore();
+    mw.show();
+    mw.focus();
+    mw.webContents.setAudioMuted(false);
+    setPlayerAudioMuted(false);
+  } else {
+    panicHidden = true;
+    mw.webContents.setAudioMuted(true);
+    setPlayerAudioMuted(true);
+    mw.hide();
+  }
+}
+
+ipcMain.handle("panic-hide", () => panicToggle());
+
+function registerPanicShortcut() {
+  try {
+    const ok = globalShortcut.register(
+      "CommandOrControl+Shift+X",
+      panicToggle,
+    );
+    if (!ok) {
+      // Another app/OS owns the chord — the in-app keydown listener still
+      // covers it while the window is focused.
+      console.log("[panic] Ctrl+Shift+X unavailable, global hotkey skipped");
+    }
+  } catch {}
+}
+
 // -- Desktop notifications -----------------------------------------------------
 // Called from the renderer whenever it wants a native OS notification.
 ipcMain.handle(
@@ -1120,9 +1174,15 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     _bench("app ready");
     createWindow();
+    registerPanicShortcut();
   });
   app.on("window-all-closed", () => app.quit());
   app.on("before-quit", () => discordRpc.shutdown());
+  app.on("will-quit", () => {
+    try {
+      globalShortcut.unregisterAll();
+    } catch {}
+  });
   app.on("activate", () => {
     if (mainWindow === null) createWindow();
   });

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { storage, hashPin } from "../utils/storage";
 import { sortSubsByPref } from "../utils/subtitles";
+import { searchAllSites } from "../utils/adultSearch";
 import { WarningIcon } from "../components/Icons";
 import ScrollRow from "../components/ScrollRow";
 
@@ -161,6 +162,36 @@ const fmtViews = (n) =>
       ? `${Math.round(n / 1e3)}K`
       : String(n ?? 0);
 
+// Seconds → "m:ss" / "h:mm:ss" for the card duration badge, when the source
+// API didn't already provide a label.
+const fmtDur = (s) => {
+  const sec = Math.round(s || 0);
+  if (!sec) return "";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const ss = String(sec % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+};
+
+// Normalized cross-site result (see utils/adultSearch.js) → the
+// Eporner-flavored shape AdultCard and the player path already expect.
+const toCardV = (v) => ({
+  id: v.id,
+  title: v.title,
+  url: v.url,
+  embed: v.embed,
+  default_thumb: v.thumb ? { src: v.thumb } : null,
+  thumbs: (v.thumbs?.length ? v.thumbs : [v.thumb])
+    .filter(Boolean)
+    .map((src) => ({ src })),
+  length_sec: v.duration || 0,
+  length_min: v.durationMin || fmtDur(v.duration),
+  rate: v.rating || 0,
+  views: v.views || 0,
+  keywords: v.keywords || "",
+  site: v.site,
+});
+
 // Site tab row shared by Sites/Images/Creators modes: star a site to pin
 // it to the front; the filter box narrows the row by name.
 function SiteTabs({ list, selected, onSelect, favs, onToggleFav, filter, onFilter }) {
@@ -240,6 +271,24 @@ function AdultCard({ v, onPlay, seen }) {
         {v.title}
       </div>
       <div className="adult-card__meta">
+        {v.site && (
+          <span
+            style={{
+              color: "var(--red)",
+              background: "var(--red-dim)",
+              borderRadius: 4,
+              padding: "0 5px",
+              marginRight: 5,
+              fontWeight: 700,
+              fontSize: 9,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+              verticalAlign: 1,
+            }}
+          >
+            {v.site}
+          </span>
+        )}
         {v.rate ? `${Math.round(parseFloat(v.rate) * 20)}%` : ""}
         {v.views ? ` · ${fmtViews(v.views)}` : ""}
       </div>
@@ -311,8 +360,11 @@ export default function AdultPage() {
           embed: v.embed,
           url: v.url,
           kw: v.keywords || "",
+          site: v.site || "",
         },
-        ...recents.filter((r) => r.id !== v.id),
+        ...recents.filter(
+          (r) => r.id !== v.id && (!v.url || r.url !== v.url),
+        ),
       ].slice(0, 12);
       setRecents(next);
       storage.set("adultRecents", next);
@@ -346,6 +398,14 @@ export default function AdultPage() {
   };
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
+  // "🌐 All" tab — merged multi-site search; still browse mode under the hood
+  const [searchAll, _setSearchAll] = useState(
+    () => storage.get("adultSearchAll") === true,
+  );
+  const setSearchAll = (v) => {
+    storage.set("adultSearchAll", v);
+    _setSearchAll(v);
+  };
   const [gay, _setGay] = useState(() => storage.get("adultGay") === true);
   const setGay = (v) => {
     storage.set("adultGay", v);
@@ -366,8 +426,12 @@ export default function AdultPage() {
   const pickSurprise = () => {
     if (!videos.length) return;
     const seenIds = new Set(recents.map((r) => r.id));
+    // merged "All" results carry site-prefixed ids — match on url too
+    const seenUrls = new Set(recents.map((r) => r.url).filter(Boolean));
     if (playing) seenIds.add(playing.id);
-    const fresh = videos.filter((v) => !seenIds.has(v.id));
+    const isSeen = (v) =>
+      seenIds.has(v.id) || (v.url && seenUrls.has(v.url));
+    const fresh = videos.filter((v) => !isSeen(v));
     const pool = fresh.length
       ? fresh
       : videos.filter((v) => v.id !== playing?.id);
@@ -392,27 +456,57 @@ export default function AdultPage() {
     setVideos([]);
     setPage(1);
     setHasMore(true);
-  }, [cat, order, query, gay, dur, minRate]);
+  }, [searchAll, cat, order, query, gay, dur, minRate]);
 
   useEffect(() => {
     if (mode !== "browse") return;
     const req = ++reqRef.current;
     setLoading(true);
+    const durTest = DURS.find((d) => d.id === dur)?.test;
+    const rateMin = RATINGS.find((r) => r.id === minRate)?.min;
+    // length/rating filters run client-side so they work on merged results too
+    const applyFilters = (vids) => {
+      if (durTest) vids = vids.filter((v) => durTest(v.length_sec || 0));
+      if (rateMin)
+        vids = vids.filter((v) => parseFloat(v.rate || "0") >= rateMin);
+      return vids;
+    };
+    const append = (vids) =>
+      setVideos((prev) => {
+        if (page === 1) return vids;
+        // later pages can resurface earlier hits — dedupe on url/id
+        const keys = new Set(prev.map((p) => p.url || p.id));
+        return [...prev, ...vids.filter((v) => !keys.has(v.url || v.id))];
+      });
+    if (searchAll) {
+      // Multi-site search. The other APIs don't share Eporner's gay flag, so
+      // the chip just folds into the query text instead.
+      const base = query || cat || "all";
+      const q = gay ? (base === "all" ? "gay" : `gay ${base}`) : base;
+      searchAllSites(q, page)
+        .then((items) => {
+          if (reqRef.current !== req) return;
+          const vids = applyFilters(items.map(toCardV));
+          append(vids);
+          setHasMore(items.length > 0);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (reqRef.current === req) setLoading(false);
+        });
+      return;
+    }
     const q = query || cat || "all";
     const u =
       `${API}?query=${encodeURIComponent(q)}&per_page=40&page=${page}` +
       `&thumbsize=big&order=${order}${gay ? "&gay=1" : ""}`;
-    const durTest = DURS.find((d) => d.id === dur)?.test;
-    const rateMin = RATINGS.find((r) => r.id === minRate)?.min;
     fetch(u)
       .then((r) => r.json())
       .then((data) => {
         if (reqRef.current !== req) return;
         let vids = Array.isArray(data?.videos) ? data.videos : [];
-        if (durTest) vids = vids.filter((v) => durTest(v.length_sec || 0));
-        if (rateMin)
-          vids = vids.filter((v) => parseFloat(v.rate || "0") >= rateMin);
-        setVideos((prev) => (page === 1 ? vids : [...prev, ...vids]));
+        vids = applyFilters(vids);
+        append(vids);
         setHasMore(
           data?.total_pages ? page < data.total_pages : vids.length > 0,
         );
@@ -421,7 +515,7 @@ export default function AdultPage() {
       .finally(() => {
         if (reqRef.current === req) setLoading(false);
       });
-  }, [mode, cat, order, query, gay, page]);
+  }, [mode, searchAll, cat, order, query, gay, dur, minRate, page]);
 
   // ── Recommended: derive the top keyword terms from watched items and pull
   // the best-rated matches. Recents saved before keywords were recorded fall
@@ -914,10 +1008,23 @@ export default function AdultPage() {
         </div>
         <div className="browse-tabs">
           <button
-            className={`browse-tab${mode === "browse" ? " browse-tab--active" : ""}`}
-            onClick={() => setMode("browse")}
+            className={`browse-tab${mode === "browse" && !searchAll ? " browse-tab--active" : ""}`}
+            onClick={() => {
+              setMode("browse");
+              setSearchAll(false);
+            }}
           >
             Browse
+          </button>
+          <button
+            className={`browse-tab${mode === "browse" && searchAll ? " browse-tab--active" : ""}`}
+            title="Search every site with a JSON API at once"
+            onClick={() => {
+              setMode("browse");
+              setSearchAll(true);
+            }}
+          >
+            🌐 All
           </button>
           <button
             className={`browse-tab${mode === "sites" ? " browse-tab--active" : ""}`}
@@ -1088,17 +1195,19 @@ export default function AdultPage() {
         )}
         {mode === "browse" && (
           <>
-            <select
-              className="browse-sort"
-              value={order}
-              onChange={(e) => setOrder(e.target.value)}
-            >
-              {ORDERS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            {!searchAll && (
+              <select
+                className="browse-sort"
+                value={order}
+                onChange={(e) => setOrder(e.target.value)}
+              >
+                {ORDERS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className="browse-sort"
               value={dur}
@@ -1189,9 +1298,14 @@ export default function AdultPage() {
                 <button
                   key={r.id}
                   className="browse-chip recent-chip"
-                  title={r.title}
+                  title={r.site ? `${r.site} — ${r.title}` : r.title}
                   onClick={() => setPlaying(r)}
                 >
+                  {r.site && (
+                    <span style={{ color: "var(--red)", fontSize: 10 }}>
+                      {r.site}
+                    </span>
+                  )}
                   {r.title.length > 36 ? r.title.slice(0, 36) + "…" : r.title}
                   <span
                     className="recent-x"
@@ -1299,13 +1413,19 @@ export default function AdultPage() {
           <div className={`adult-grid adult-grid--${gridSize}`}>
             {videos
               .filter(
-                (v) => !hideSeen || !recents.some((r) => r.id === v.id),
+                (v) =>
+                  !hideSeen ||
+                  !recents.some(
+                    (r) => r.id === v.id || (v.url && r.url === v.url),
+                  ),
               )
               .map((v) => (
               <AdultCard
                 key={v.id}
                 v={v}
-                seen={recents.some((r) => r.id === v.id)}
+                seen={recents.some(
+                  (r) => r.id === v.id || (v.url && r.url === v.url),
+                )}
                 onPlay={() => setPlaying(v)}
               />
             ))}

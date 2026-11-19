@@ -834,17 +834,60 @@ video::cue{font-size:var(--cuesz,1.15em)}
     for(let k=0;k<tt.length;k++)tt[k].mode=(k===idx?'showing':'hidden');
     [...subsBox.children].forEach((b,k)=>b.classList.toggle('on',k===idx+1));
   }
+  // ── Subtitle sync: refetch the active track, shift cue timestamps by
+  // subShift seconds, and swap in a shifted Blob URL (persisted via cookie)
+  let subShift=parseFloat(ck('sb_suboff'))||0;
+  const origSrc={};
+  async function applyShift(){
+    const tt=video.textTracks;let idx=-1;
+    for(let k=0;k<tt.length;k++)if(tt[k].mode==='showing')idx=k;
+    if(idx<0)return;
+    const el=video.querySelectorAll('track')[idx];
+    if(!el)return;
+    if(!origSrc[idx])origSrc[idx]=el.src;
+    try{
+      const txt=await (await fetch(origSrc[idx])).text();
+      const z=(n,l)=>String(n).padStart(l||2,'0');
+      const shifted=txt.replace(/(?:(\d{2}):)?(\d{2}):(\d{2})[.,](\d{3})/g,(m,h,mn,s,ms)=>{
+        let t=(+(h||0))*3600000+(+mn)*60000+(+s)*1000+(+ms)+Math.round(subShift*1000);
+        if(t<0)t=0;
+        return z(Math.floor(t/3600000))+':'+z(Math.floor(t/60000)%60)+':'+z(Math.floor(t/1000)%60)+'.'+z(t%1000,3);
+      });
+      const old=el.src;
+      el.src=URL.createObjectURL(new Blob([shifted],{type:'text/vtt'}));
+      if(old.startsWith('blob:'))URL.revokeObjectURL(old);
+      video.textTracks[idx].mode='hidden';video.textTracks[idx].mode='showing';
+    }catch(e){}
+  }
   if(SUB_LABELS.length){
     ssec.hidden=false;
     const mkSub=(label,idx)=>{
       const b=document.createElement('button');
       b.textContent=label;
-      b.onclick=()=>{setTrack(idx);menu.hidden=true;};
+      b.onclick=()=>{setTrack(idx);if(subShift)applyShift();menu.hidden=true;};
       subsBox.appendChild(b);
     };
     mkSub('Off',-1);
     SUB_LABELS.forEach((l,i)=>mkSub(l,i));
     setTrack(0);
+    // Sync offset controls: −/＋ 0.5s buttons + live readout
+    const syncLbl=document.createElement('span');
+    syncLbl.style.cssText='color:#999;font-size:11px;align-self:center';
+    syncLbl.textContent='Sync '+(subShift>=0?'+':'')+subShift.toFixed(1)+'s';
+    const setShift=(d)=>{
+      subShift=Math.round((subShift+d)*10)/10;
+      syncLbl.textContent='Sync '+(subShift>=0?'+':'')+subShift.toFixed(1)+'s';
+      document.cookie='sb_suboff='+subShift+';path=/;max-age=31536000';
+      applyShift();
+    };
+    const mkSync=(label,ds)=>{
+      const b=document.createElement('button');
+      b.textContent=label;b.style.minWidth='34px';
+      b.onclick=(e)=>{e.stopPropagation();setShift(ds);};
+      subsBox.appendChild(b);
+    };
+    mkSync('−0.5',-0.5);subsBox.appendChild(syncLbl);mkSync('+0.5',0.5);
+    if(subShift)applyShift();
   }
   // Loop toggle — handy for short clips
   const playOpts=document.getElementById('playopts');

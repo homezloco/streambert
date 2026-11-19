@@ -9,6 +9,10 @@ import {
   RatingLockIcon,
 } from "./Icons";
 
+// Progress ring geometry (svg viewBox 0 0 26 26)
+const PROGRESS_RING_R = 10;
+const PROGRESS_RING_C = 2 * Math.PI * PROGRESS_RING_R;
+
 const MediaCard = memo(function MediaCard({
   item,
   onClick,
@@ -131,6 +135,31 @@ const MediaCard = memo(function MediaCard({
                 style={{ width: `${Math.min(progress, 100)}%` }}
               />
             </div>
+          )}
+          {!isUnreleased && progress > 0 && progress < 100 && !isWatched && (
+            <svg
+              className="card-progress-ring"
+              viewBox="0 0 26 26"
+              aria-hidden="true"
+            >
+              <circle
+                className="card-progress-ring-track"
+                cx="13"
+                cy="13"
+                r={PROGRESS_RING_R}
+              />
+              <circle
+                className="card-progress-ring-arc"
+                cx="13"
+                cy="13"
+                r={PROGRESS_RING_R}
+                strokeDasharray={PROGRESS_RING_C}
+                strokeDashoffset={
+                  PROGRESS_RING_C * (1 - Math.min(progress, 100) / 100)
+                }
+                transform="rotate(-90 13 13)"
+              />
+            </svg>
           )}
           {!isUnreleased && isWatched && (
             <div className="card-watched-badge">

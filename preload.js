@@ -124,6 +124,9 @@ contextBridge.exposeInMainWorld("electron", {
   // Quit app
   quitApp: () => ipcRenderer.invoke("quit-app"),
 
+  // Panic button (Ctrl+Shift+X): hide + mute the window; toggles on repeat
+  panic: () => ipcRenderer.invoke("panic-hide"),
+
   // Signal to main process that the player has stopped
   playerStopped: () => ipcRenderer.send("player-stopped"),
 
