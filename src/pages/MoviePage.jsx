@@ -158,6 +158,7 @@ export default function MoviePage({
   const [nativePlayerUrl, setNativePlayerUrl] = useState(null);
   const nativeSwapRef = useRef(false);
   const [collection, setCollection] = useState(null); // { name, parts }
+  const [similar, setSimilar] = useState(null); // More-like-this row
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
 
@@ -344,6 +345,41 @@ export default function MoviePage({
       mounted = false;
     };
   }, [details?.belongs_to_collection?.id, apiKey]);
+
+  // "More like this": TMDB recommendations when a key is configured, else the
+  // title's top genre catalog (Cinemeta has no recommendations endpoint)
+  useEffect(() => {
+    setSimilar(null);
+    const gid = details?.genres?.[0]?.id;
+    let mounted = true;
+    tmdbFetch(`/movie/${item.id}/recommendations`, apiKey)
+      .then((d) =>
+        d?.results?.length
+          ? d.results
+          : gid != null
+            ? tmdbFetch(
+                `/discover/movie?with_genres=${gid}&sort_by=popularity.desc`,
+                apiKey,
+              ).then((x) => x.results || [])
+            : [],
+      )
+      .then((list) => {
+        if (!mounted) return;
+        const seen = new Set([String(item.id)]);
+        const out = [];
+        for (const it of list || []) {
+          if (!it?.id || seen.has(String(it.id))) continue;
+          seen.add(String(it.id));
+          out.push({ ...it, media_type: "movie" });
+          if (out.length >= 20) break;
+        }
+        if (out.length) setSimilar(out);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [item.id, details?.genres?.[0]?.id, apiKey]);
 
   // Reset m3u8 URL, subtitle URL and source menu whenever the movie or source changes
   useEffect(() => {
@@ -1561,6 +1597,26 @@ export default function MoviePage({
                 />
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {similar && onSelect && (
+        <div className="section">
+          <div className="section-title">More like this</div>
+          <div className="scroll-row">
+            {similar.map((s) => (
+              <CollectionCard
+                key={s.id}
+                part={s}
+                isCurrent={false}
+                onSelect={onSelect}
+                progress={progress[`movie_${s.id}`] || 0}
+                watched={watched}
+                onMarkWatched={onMarkWatched}
+                onMarkUnwatched={onMarkUnwatched}
+              />
+            ))}
           </div>
         </div>
       )}

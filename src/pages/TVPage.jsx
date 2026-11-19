@@ -55,6 +55,7 @@ import {
   CastIcon,
 } from "../components/Icons";
 import DownloadModal from "../components/DownloadModal";
+import MediaCard from "../components/MediaCard";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
@@ -429,8 +430,10 @@ export default function TVPage({
   downloads,
   onGoToDownloads,
   onEpisodeChange,
+  onSelect,
 }) {
   const [details, setDetails] = useState(null);
+  const [similar, setSimilar] = useState(null); // More-like-this row
   const [seasonData, setSeasonData] = useState(null);
   const [failedSeasons, setFailedSeasons] = useState(() => new Set()); // season numbers which give 404 on TMDB
   const [selectedSeason, setSelectedSeason] = useState(() =>
@@ -610,6 +613,34 @@ export default function TVPage({
           });
           const target = incomplete || validSeasons[0] || d.seasons?.[0];
           if (target) setSelectedSeason(target.season_number);
+          // "More like this": TMDB recommendations when a key is configured,
+          // else the title's top genre catalog (keyless mode has no recs)
+          setSimilar(null);
+          const gid = d.genres?.[0]?.id;
+          tmdbFetch(`/tv/${item.id}/recommendations`, apiKey)
+            .then((r) =>
+              r?.results?.length
+                ? r.results
+                : gid != null
+                  ? tmdbFetch(
+                      `/discover/tv?with_genres=${gid}&sort_by=popularity.desc`,
+                      apiKey,
+                    ).then((x) => x.results || [])
+                  : [],
+            )
+            .then((list) => {
+              if (!mounted) return;
+              const seen = new Set([String(item.id)]);
+              const out = [];
+              for (const it of list || []) {
+                if (!it?.id || seen.has(String(it.id))) continue;
+                seen.add(String(it.id));
+                out.push({ ...it, media_type: "tv" });
+                if (out.length >= 20) break;
+              }
+              if (out.length) setSimilar(out);
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {
@@ -2866,6 +2897,25 @@ export default function TVPage({
               )}
           </div>
         </>
+      )}
+
+      {similar && onSelect && (
+        <div className="section">
+          <div className="section-title">More like this</div>
+          <div className="scroll-row">
+            {similar.map((s) => (
+              <MediaCard
+                key={s.id}
+                item={s}
+                onClick={() => onSelect(s)}
+                progress={progress[`tv_${s.id}`] || 0}
+                watched={watched}
+                onMarkWatched={onMarkWatched}
+                onMarkUnwatched={onMarkUnwatched}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       {showTrailer && trailerKey && (

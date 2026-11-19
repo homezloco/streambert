@@ -1138,6 +1138,7 @@ export default function App() {
                 downloads={downloads}
                 onGoToDownloads={handleGoToDownloads}
                 onEpisodeChange={setWatchingEpisode}
+                onSelect={handleSelectResult}
               />
             )}
             {page === "history" && (

@@ -595,8 +595,10 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;object-fit:contain;display:block}
+video::cue{font-size:var(--cuesz,1.15em)}
 #gear{position:absolute;right:16px;bottom:64px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:15px;cursor:pointer;opacity:.85}
-#gear:hover{opacity:1}
+#pip{position:absolute;right:16px;bottom:106px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;opacity:.85}
+#gear:hover,#pip:hover{opacity:1}
 #menu{position:absolute;right:16px;bottom:108px;z-index:10;background:rgba(15,15,15,.92);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px;min-width:150px;font:13px/1.6 system-ui,sans-serif;color:#eee;max-height:60vh;overflow:auto}
 #menu .sec{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#999;margin:6px 4px 2px}
 #menu .sec:first-child{margin-top:0}
@@ -620,10 +622,12 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
 <video id="v" controls playsinline autoplay>${track}</video>
 <div id="seekbar"><div class="rail"><div id="seekbuf"></div><div id="seekfill"></div></div><div id="thumb"><canvas id="tc" width="160" height="90"></canvas><div id="ttime"></div></div></div>
 <button id="gear" title="Quality & speed">&#9881;</button>
+<button id="pip" title="Picture in picture">&#9719;</button>
 <div id="help" hidden><b>Shortcuts</b>
 <span>&larr;/&rarr;</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
 <span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
-<span>,</span>/<span>.</span> frame step &nbsp;<span>?</span> this help</div>
+<span>P</span> picture-in-picture &nbsp;<span>,</span>/<span>.</span> frame step<br>
+<span>?</span> this help</div>
 <div id="menu" hidden>
   <div class="sec" id="qsec">Quality</div>
   <div id="levels"></div>
@@ -671,6 +675,7 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
       case 'm':case 'M':video.muted=!video.muted;break;
       case ',':video.pause();video.currentTime=Math.max(0,video.currentTime-1/30);break;
       case '.':video.pause();video.currentTime=Math.min(video.duration||Infinity,video.currentTime+1/30);break;
+      case 'p':case 'P':togglePip();break;
     }
   });
   // Click toggles play/pause (250ms delay so dblclick→fullscreen wins);
@@ -833,6 +838,31 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
   loopBtn.textContent='Loop';
   loopBtn.onclick=()=>{video.loop=!video.loop;loopBtn.classList.toggle('on',video.loop);menu.hidden=true;};
   playOpts.appendChild(loopBtn);
+  // Subtitle size — Small/Normal/Large cue scaling, persisted via cookie
+  const szSec=document.createElement('div');szSec.className='sec';szSec.textContent='Caption size';
+  const szBox=document.createElement('div');szBox.id='cuesizes';
+  playOpts.appendChild(szSec);playOpts.appendChild(szBox);
+  const setCue=(sz,b)=>{
+    document.documentElement.style.setProperty('--cuesz',sz);
+    document.cookie='sb_cuesz='+sz+';path=/;max-age=31536000';
+    [...szBox.children].forEach(x=>x.classList.toggle('on',x===b));
+  };
+  [['S','0.75em'],['M','1.15em'],['L','1.7em']].forEach(([l,sz])=>{
+    const b=document.createElement('button');b.textContent=l;
+    b.onclick=()=>{setCue(sz,b);menu.hidden=true;};szBox.appendChild(b);
+    if(ck('sb_cuesz')===sz)b.classList.add('on');
+  });
+  if(ck('sb_cuesz'))document.documentElement.style.setProperty('--cuesz',ck('sb_cuesz'));
+  // Picture-in-picture (Chromium PiP floats the video over other windows)
+  const pipBtn=document.getElementById('pip');
+  const togglePip=()=>{
+    try{
+      if(document.pictureInPictureElement)document.exitPictureInPicture();
+      else video.requestPictureInPicture().catch(()=>{});
+    }catch(e){}
+  };
+  pipBtn.addEventListener('click',(e)=>{e.stopPropagation();togglePip();});
+  if(document.pictureInPictureEnabled===false)pipBtn.style.display='none';
   function buildLevels(hls){
     // Auto first, then real levels sorted best→worst
     const items=[{label:'Auto',idx:-1}].concat(
