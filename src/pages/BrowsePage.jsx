@@ -116,7 +116,7 @@ export default function BrowsePage({
   const decadeRange = DECADES.find((d) => d.id === decade);
   const shown = useMemo(
     () =>
-      decadeRange
+      decadeRange?.min != null
         ? items.filter((i) => {
             const y = itemYear(i);
             return y >= decadeRange.min && y <= decadeRange.max;
