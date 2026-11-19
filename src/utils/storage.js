@@ -174,6 +174,17 @@ export const sourceScore = (sourceId) => {
 /** True when running inside Electron (contextBridge exposed). */
 export const isElectron = typeof window !== "undefined" && !!window.electron;
 
+/** SHA-256 hex of a PIN string — stored so the plaintext never touches disk. */
+export async function hashPin(pin) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(String(pin)),
+  );
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 /** Format a byte count into a human-readable string. */
 export function formatBytes(bytes) {
   if (bytes === null || bytes === undefined) return "…";

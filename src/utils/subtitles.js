@@ -25,6 +25,21 @@ export const LANG_LABEL = Object.fromEntries(
   SUBTITLE_LANGUAGES.map((l) => [l.code, l.label]),
 );
 
+/**
+ * Order captured subtitle tracks so the configured language is first —
+ * the native player defaults to track 0, so this becomes the auto-pick.
+ */
+export function sortSubsByPref(subs, pref) {
+  if (!Array.isArray(subs) || subs.length < 2) return subs;
+  const p = (pref || "en").toLowerCase();
+  const rank = (s) =>
+    (s.lang || "").toLowerCase().startsWith(p) ||
+    (s.label || "").toLowerCase().startsWith(p)
+      ? 0
+      : 1;
+  return [...subs].sort((a, b) => rank(a) - rank(b));
+}
+
 /** Return the style props for a source badge (SubDL / Wyzie) */
 export function sourceBadgeStyle(sub) {
   const isSubDL = sub.via_subdl;

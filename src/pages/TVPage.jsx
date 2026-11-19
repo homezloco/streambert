@@ -86,6 +86,7 @@ import {
   GAMEPAD_CLEANUP_JS,
 } from "../utils/playerGamepadScript";
 import { useSourceId } from "../utils/useSourceId";
+import { sortSubsByPref } from "../utils/subtitles";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
 
@@ -990,10 +991,8 @@ export default function TVPage({
     if (!nativeMode || !m3u8Url || isAsync) return;
     if (nativeSwapRef.current) return;
     nativeSwapRef.current = true;
-    const sub =
-      interceptedSubs.find((s) => /^en/i.test(s.lang || "")) ||
-      interceptedSubs[0] ||
-      null;
+    const subsSorted = sortSubsByPref(interceptedSubs, playerSubLang || "en");
+    const sub = subsSorted[0] || null;
     // Same key shape as currentProgressKey (declared later in the component)
     const pk = selectedEp
       ? `tv_${item.id}_s${selectedSeason}e${selectedEp.episode_number}`
@@ -1003,7 +1002,7 @@ export default function TVPage({
       ?.nativePlay({
         url: m3u8Url,
         subtitle: sub?.url || null,
-        subtitles: interceptedSubs,
+        subtitles: subsSorted,
         startTime,
       })
       .then((r) => {

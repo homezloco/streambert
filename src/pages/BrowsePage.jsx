@@ -179,6 +179,16 @@ export default function BrowsePage({
               </option>
             ))}
           </select>
+          <button
+            className="browse-chip"
+            title="Open a random title from what's loaded"
+            disabled={!items.length}
+            onClick={() =>
+              onSelect(items[Math.floor(Math.random() * items.length)])
+            }
+          >
+            🎲 Surprise
+          </button>
         </div>
 
         <div className="browse-genres">

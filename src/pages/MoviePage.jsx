@@ -76,6 +76,7 @@ import {
   GAMEPAD_CLEANUP_JS,
 } from "../utils/playerGamepadScript";
 import { useSourceId } from "../utils/useSourceId";
+import { sortSubsByPref } from "../utils/subtitles";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
 
@@ -594,16 +595,17 @@ export default function MoviePage({
     if (!nativeMode || !m3u8Url || sourceIsAsync(playerSource)) return;
     if (nativeSwapRef.current) return;
     nativeSwapRef.current = true;
-    const sub =
-      interceptedSubs.find((s) => /^en/i.test(s.lang || "")) ||
-      interceptedSubs[0] ||
-      null;
+    const subsSorted = sortSubsByPref(
+      interceptedSubs,
+      playerSubLang || "en",
+    );
+    const sub = subsSorted[0] || null;
     const startTime = storage.get("dlTime_" + progressKey) || 0;
     window.electron
       ?.nativePlay({
         url: m3u8Url,
         subtitle: sub?.url || null,
-        subtitles: interceptedSubs,
+        subtitles: subsSorted,
         startTime,
       })
       .then((r) => {

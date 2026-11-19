@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { storage } from "../utils/storage";
+import { storage, hashPin } from "../utils/storage";
+import { sortSubsByPref } from "../utils/subtitles";
 import { WarningIcon } from "../components/Icons";
 
 const SITES = [
@@ -249,6 +250,14 @@ export default function AdultPage() {
   const [confirmed, setConfirmed] = useState(
     () => storage.get("adultConfirmed") === true,
   );
+  // Optional PIN lock (set in Settings > Privacy & Network). The unlock is
+  // per-window-session only — relaunching the app re-locks the section.
+  const [pinHash] = useState(() => storage.get("adultPinHash") || null);
+  const [unlocked, setUnlocked] = useState(
+    () => sessionStorage.getItem("adultUnlocked") === "1",
+  );
+  const [pinVal, setPinVal] = useState("");
+  const [pinErr, setPinErr] = useState(false);
   // mode/site selections persist across visits
   const [mode, _setMode] = useState(
     () => storage.get("adultMode") || "browse",
@@ -335,6 +344,9 @@ export default function AdultPage() {
     storage.set("adultGay", v);
     _setGay(v);
   };
+  const [hideSeen, setHideSeen] = useState(
+    () => storage.get("adultHideSeen") === true,
+  );
   const [videos, setVideos] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -472,10 +484,14 @@ export default function AdultPage() {
     } catch {}
     nativeCtxRef.current = key ? { key } : null;
     const startTime = key ? storage.get("adultResume_" + key) || 0 : 0;
+    const subsSorted = sortSubsByPref(
+      subs,
+      storage.get("subtitleLang") || "en",
+    );
     const res = await window.electron?.nativePlay?.({
       url,
-      subtitle: subs[0]?.url || null,
-      subtitles: subs,
+      subtitle: subsSorted[0]?.url || null,
+      subtitles: subsSorted,
       startTime,
     });
     if (res?.ok && res.playerUrl) {
@@ -680,6 +696,48 @@ export default function AdultPage() {
     setPlaying(null);
     window.electron?.playerStopped?.();
   }, []);
+
+  if (pinHash && !unlocked) {
+    return (
+      <div className="adult-gate fade-in">
+        <WarningIcon size={48} />
+        <h2>PIN required</h2>
+        <p>This section is locked. Enter your PIN to continue.</p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if ((await hashPin(pinVal)) === pinHash) {
+              sessionStorage.setItem("adultUnlocked", "1");
+              setUnlocked(true);
+            } else {
+              setPinErr(true);
+              setPinVal("");
+            }
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}
+        >
+          <input
+            className="adult-search site-filter"
+            style={{ maxWidth: 180, textAlign: "center" }}
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            placeholder="PIN"
+            value={pinVal}
+            onChange={(e) => setPinVal(e.target.value)}
+          />
+          {pinErr && (
+            <span style={{ color: "var(--red)", fontSize: 13 }}>
+              Wrong PIN
+            </span>
+          )}
+          <button className="btn btn-primary" type="submit">
+            Unlock
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   if (!confirmed) {
     return (
@@ -1097,10 +1155,26 @@ export default function AdultPage() {
             >
               Gay
             </button>
+            <button
+              className={`browse-chip${hideSeen ? " browse-chip--active" : ""}`}
+              title="Hide videos you've already watched"
+              onClick={() =>
+                setHideSeen((v) => {
+                  storage.set("adultHideSeen", !v);
+                  return !v;
+                })
+              }
+            >
+              Hide seen
+            </button>
           </div>
 
           <div className="adult-grid">
-            {videos.map((v) => (
+            {videos
+              .filter(
+                (v) => !hideSeen || !recents.some((r) => r.id === v.id),
+              )
+              .map((v) => (
               <AdultCard
                 key={v.id}
                 v={v}

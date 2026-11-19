@@ -8,6 +8,7 @@ import {
   isElectron,
   clearAppCaches,
   getSourceStats,
+  hashPin,
 } from "../utils/storage";
 import {
   clearTmdbCache,
@@ -2551,6 +2552,8 @@ function NetworkSection() {
   const [blockStats, setBlockStats] = useState(null);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [resumed, setResumed] = useState(false);
+  const [adultPin, setAdultPin] = useState("");
+  const [hasPin, setHasPin] = useState(() => !!storage.get("adultPinHash"));
 
   useEffect(() => {
     window.electron?.getNetworkSettings?.().then(setCfg).catch(() => {});
@@ -2824,6 +2827,47 @@ function NetworkSection() {
         >
           Clear resume points
         </button>
+        <input
+          type="password"
+          inputMode="numeric"
+          placeholder={hasPin ? "New PIN" : "Adult PIN"}
+          value={adultPin}
+          onChange={(e) => setAdultPin(e.target.value)}
+          style={{
+            background: "var(--surface2)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            color: "var(--text1)",
+            padding: "7px 10px",
+            fontSize: 13,
+            width: 110,
+          }}
+          title="Require a PIN to open the 18+ section"
+        />
+        <button
+          className="btn btn-secondary"
+          disabled={!adultPin.trim()}
+          title="Require a PIN to open the 18+ section (relocks every app launch)"
+          onClick={async () => {
+            storage.set("adultPinHash", await hashPin(adultPin.trim()));
+            sessionStorage.removeItem("adultUnlocked");
+            setAdultPin("");
+            setHasPin(true);
+          }}
+        >
+          {hasPin ? "Change PIN" : "Set PIN"}
+        </button>
+        {hasPin && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              storage.remove("adultPinHash");
+              setHasPin(false);
+            }}
+          >
+            Remove PIN
+          </button>
+        )}
         {resumed && (
           <span style={{ fontSize: 13, color: "#4caf50" }}>✓ Cleared</span>
         )}
