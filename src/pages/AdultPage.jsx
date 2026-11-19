@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { storage, hashPin } from "../utils/storage";
 import { sortSubsByPref } from "../utils/subtitles";
 import { WarningIcon } from "../components/Icons";
+import ScrollRow from "../components/ScrollRow";
 
 const SITES = [
   { id: "eporner", name: "Eporner", url: "https://www.eporner.com" },
@@ -304,7 +305,13 @@ export default function AdultPage() {
   const setPlaying = (v) => {
     if (v) {
       const next = [
-        { id: v.id, title: v.title, embed: v.embed, url: v.url },
+        {
+          id: v.id,
+          title: v.title,
+          embed: v.embed,
+          url: v.url,
+          kw: v.keywords || "",
+        },
         ...recents.filter((r) => r.id !== v.id),
       ].slice(0, 12);
       setRecents(next);
@@ -394,6 +401,56 @@ export default function AdultPage() {
         if (reqRef.current === req) setLoading(false);
       });
   }, [mode, cat, order, query, gay, page]);
+
+  // ── Recommended: derive the top keyword terms from watched items and pull
+  // the best-rated matches. Recents saved before keywords were recorded fall
+  // back to significant words from their titles.
+  const [reco, setReco] = useState([]);
+  useEffect(() => {
+    if (mode !== "browse" || recents.length === 0) {
+      setReco([]);
+      return;
+    }
+    const STOP = new Set(
+      "the,and,with,for,from,that,this,hot,new,video,full,sex,xxx,very,gets,get,her,his,she,you,all,out,one,two,big,hard,after,before,when,what,who,how,are,was,but,not,had,has".split(
+        ",",
+      ),
+    );
+    const tally = {};
+    for (const r of recents.slice(0, 8)) {
+      const text = (r.kw || r.title || "").toLowerCase();
+      for (const w of text.split(/[,\s]+/)) {
+        const word = w.replace(/[^a-z0-9'-]/g, "");
+        if (word.length < 3 || STOP.has(word)) continue;
+        tally[word] = (tally[word] || 0) + 1;
+      }
+    }
+    const top = Object.entries(tally)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([w]) => w);
+    if (!top.length) return;
+    const seen = new Set(recents.map((r) => String(r.id)));
+    const u =
+      `${API}?query=${encodeURIComponent(top.join(" "))}` +
+      `&per_page=24&page=1&thumbsize=big&order=top-monthly${gay ? "&gay=1" : ""}`;
+    let dead = false;
+    fetch(u)
+      .then((r) => r.json())
+      .then((data) => {
+        if (dead) return;
+        const vids = (data?.videos || []).filter(
+          (v) => !seen.has(String(v.id)),
+        );
+        setReco(vids.slice(0, 14));
+      })
+      .catch(() => {});
+    return () => {
+      dead = true;
+    };
+    // Only when the watched set actually changes, not on filter tweaks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, recents]);
 
   // ── Downloading: reuse the movie downloader once a stream URL is captured ──
   const [streamUrl, setStreamUrl] = useState(null); // captured .m3u8
@@ -1131,6 +1188,23 @@ export default function AdultPage() {
               >
                 Clear
               </button>
+            </div>
+          )}
+          {reco.length > 0 && (
+            <div className="adult-reco">
+              <div className="section-title" style={{ fontSize: 14 }}>
+                Recommended for you
+              </div>
+              <ScrollRow>
+                {reco.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen={recents.some((r) => r.id === v.id)}
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
             </div>
           )}
           <div className="browse-genres">

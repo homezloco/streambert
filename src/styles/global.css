@@ -959,6 +959,18 @@ body.no-anim *::after {
 .scrollrow-btn.left { left: -4px; }
 .scrollrow-btn.right { right: -4px; }
 
+/* ── Adult recommended row ── */
+.adult-reco {
+    margin: 10px 0 6px;
+}
+.adult-reco .section-title {
+    margin-bottom: 8px;
+}
+.scroll-row .adult-card {
+    flex-shrink: 0;
+    width: 240px;
+}
+
 /* ── Back-to-top FAB ── */
 .back-to-top {
     position: fixed;
