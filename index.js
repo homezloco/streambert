@@ -943,6 +943,10 @@ function setPlayerAudioMuted(muted) {
 function panicToggle() {
   const mw = mainWindow;
   if (!mw || mw.isDestroyed()) return;
+  const lpw =
+    localPlayerWindow && !localPlayerWindow.isDestroyed()
+      ? localPlayerWindow
+      : null;
   if (panicHidden || !mw.isVisible()) {
     panicHidden = false;
     if (mw.isMinimized()) mw.restore();
@@ -950,11 +954,21 @@ function panicToggle() {
     mw.focus();
     mw.webContents.setAudioMuted(false);
     setPlayerAudioMuted(false);
+    if (lpw) {
+      lpw.webContents.setAudioMuted(false);
+      if (lpw.isMinimized()) lpw.restore();
+      lpw.show();
+    }
   } else {
     panicHidden = true;
     mw.webContents.setAudioMuted(true);
     setPlayerAudioMuted(true);
     mw.hide();
+    // The separate local-player window would still show media — hide it too
+    if (lpw) {
+      lpw.webContents.setAudioMuted(true);
+      lpw.hide();
+    }
   }
 }
 

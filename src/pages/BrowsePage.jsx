@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import MediaCard from "../components/MediaCard";
+import { storage } from "../utils/storage";
 import { tmdbFetch, MOVIE_GENRES, TV_GENRES } from "../utils/api";
 import { useRatings, getRatingForItem } from "../utils/useRatings";
 import { isRestricted } from "../utils/ageRating";
@@ -35,6 +36,14 @@ export default function BrowsePage({
   const [sort, setSort] = useState(initial?.sort || "popularity.desc");
   const [genre, setGenre] = useState(initial?.genre || null);
   const [decade, setDecade] = useState("");
+  // "Hide watched" — persisted so it survives page switches
+  const [hideWatched, _setHideWatched] = useState(
+    () => storage.get("browseHideWatched") === true,
+  );
+  const setHideWatched = (v) => {
+    storage.set("browseHideWatched", v);
+    _setHideWatched(v);
+  };
   const [items, setItems] = useState([]);
   const [pageNum, setPageNum] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -116,13 +125,20 @@ export default function BrowsePage({
   const decadeRange = DECADES.find((d) => d.id === decade);
   const shown = useMemo(
     () =>
-      decadeRange?.min != null
-        ? items.filter((i) => {
-            const y = itemYear(i);
-            return y >= decadeRange.min && y <= decadeRange.max;
-          })
-        : items,
-    [items, decadeRange],
+      items.filter((i) => {
+        if (
+          decadeRange?.min != null &&
+          (itemYear(i) < decadeRange.min || itemYear(i) > decadeRange.max)
+        )
+          return false;
+        if (
+          hideWatched &&
+          watched?.[`${i.media_type || type}_${i.id}`]
+        )
+          return false;
+        return true;
+      }),
+    [items, decadeRange, hideWatched, watched, type],
   );
 
   const enrichedRatingsMap = useMemo(() => {
@@ -183,27 +199,38 @@ export default function BrowsePage({
           <button
             className="browse-chip"
             title="Open a random title from what's loaded"
-            disabled={!items.length}
+            disabled={!shown.length}
             onClick={() =>
-              onSelect(items[Math.floor(Math.random() * items.length)])
+              onSelect(shown[Math.floor(Math.random() * shown.length)])
             }
           >
             🎲 Surprise
           </button>
           <button
             className="browse-chip"
-            title="A well-rated random pick for tonight (6.5+ from the popular catalog)"
+            title="A well-rated random pick for tonight (6.5+) — respects your genre/decade filters"
             onClick={async () => {
               for (let tries = 0; tries < 3; tries++) {
                 try {
                   const page = 1 + Math.floor(Math.random() * 10);
+                  const qs = new URLSearchParams({
+                    sort_by: "popularity.desc",
+                    page: String(page),
+                  });
+                  if (genre) qs.set("with_genres", String(genre));
                   const d = await tmdbFetch(
-                    `/discover/${type}?sort_by=popularity.desc&page=${page}`,
+                    `/discover/${type}?${qs.toString()}`,
                     apiKey,
                   );
                   const pool = (d?.results || [])
                     .map((i) => ({ ...i, media_type: type }))
-                    .filter((i) => (i.vote_average || 0) >= 6.5);
+                    .filter(
+                      (i) =>
+                        (i.vote_average || 0) >= 6.5 &&
+                        (decadeRange?.min == null ||
+                          (itemYear(i) >= decadeRange.min &&
+                            itemYear(i) <= decadeRange.max)),
+                    );
                   if (pool.length) {
                     onSelect(
                       pool[Math.floor(Math.random() * pool.length)],
@@ -215,6 +242,15 @@ export default function BrowsePage({
             }}
           >
             🌙 Tonight
+          </button>
+          <button
+            className={
+              "browse-chip" + (hideWatched ? " browse-chip--active" : "")
+            }
+            title="Hide titles you've already watched"
+            onClick={() => setHideWatched(!hideWatched)}
+          >
+            Hide watched
           </button>
         </div>
 
