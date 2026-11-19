@@ -61,6 +61,8 @@ import {
   getSourceStats,
   recordSourceResult,
   sourceScore,
+  getTitleSource,
+  recordTitleSource,
 } from "../utils/storage";
 import {
   fetchMovieRating,
@@ -80,6 +82,7 @@ import { useSourceId } from "../utils/useSourceId";
 import { sortSubsByPref } from "../utils/subtitles";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
+import Toast, { useToast } from "../components/Toast";
 
 export default function MoviePage({
   item,
@@ -164,6 +167,8 @@ export default function MoviePage({
   const [ovFull, setOvFull] = useState(false); // expand long overview
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
+  // Small non-blocking notice (e.g. silent source failover)
+  const [toast, showToast] = useToast();
 
   // ID the selected source expects (TMDB id, or converted IMDb id)
   const srcId = useSourceId(playerSource, "movie", item.id, apiKey);
@@ -236,6 +241,9 @@ export default function MoviePage({
   const restricted = isRestricted(rating.minAge, ageLimitSetting);
 
   const progressKey = `movie_${item.id}`;
+  // Mirror for effects/handlers with empty deps (e.g. the m3u8 listener)
+  const progressKeyRef = useRef(progressKey);
+  progressKeyRef.current = progressKey;
   const pct = progress[progressKey] || 0;
   const isWatched = !!watched?.[progressKey];
   const hasProgress = pct > 0;
@@ -420,6 +428,19 @@ export default function MoviePage({
     setWebviewLoading(true); // instantly blank the player on every source/item switch
   }, [item.id, playerSource, dubMode]);
 
+  // Per-title source memory: if a previous play on this title succeeded on a
+  // specific source, default the picker to it — unless that source has since
+  // proven unreliable (score < 0.35).
+  useEffect(() => {
+    const remembered = getTitleSource(progressKey);
+    if (!remembered || remembered === playerSourceRef.current) return;
+    if (!PLAYER_SOURCES.some((s) => s.id === remembered)) return;
+    const sc = sourceScore(remembered);
+    if (sc !== null && sc < 0.35) return;
+    setPlayerSource(remembered);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
   // Fetch AniList data + auto-set source for anime/non-anime
   useEffect(() => {
     let mounted = true;
@@ -553,9 +574,11 @@ export default function MoviePage({
     const handler = window.electron.onM3u8Found((url) => {
       setM3u8Url((prev) => (prev !== url ? url : prev));
       // A real stream URL means the source delivered — count it once per play
+      // and remember it for this title
       if (!statsOkRef.current) {
         statsOkRef.current = true;
         recordSourceResult(playerSourceRef.current, true);
+        recordTitleSource(progressKeyRef.current, playerSourceRef.current);
       }
     });
     return () => window.electron.offM3u8Found(handler);
@@ -828,6 +851,7 @@ export default function MoviePage({
             if (ct > 2 && !statsOkRef.current) {
               statsOkRef.current = true;
               recordSourceResult(playerSource, true);
+              recordTitleSource(progressKey, playerSource);
             }
 
             // Resume: player started near the beginning but we have a saved
@@ -928,6 +952,12 @@ export default function MoviePage({
         }
       }
       if (best && bestScore >= 0.6) {
+        const fromLabel =
+          PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
+          playerSource;
+        const toLabel =
+          PLAYER_SOURCES.find((s) => s.id === best)?.label ?? best;
+        showToast(`${fromLabel} was unreliable — switched to ${toLabel}`);
         setPlayerSource(best);
         storage.set(STORAGE_KEYS.PLAYER_SOURCE, best);
       }
@@ -938,7 +968,7 @@ export default function MoviePage({
     nativeSwapRef.current = false;
     setPlaying(true);
     onHistory({ ...d, media_type: "movie" });
-  }, [d, onHistory, playerSource]);
+  }, [d, onHistory, playerSource, showToast]);
 
   // Intercept fullscreen requests from embedded players (vidsrc / 2embed use
   // the native Fullscreen API which would otherwise fullscreen the entire app).
@@ -1704,6 +1734,8 @@ export default function MoviePage({
           tmdbId={details?.moviedb_id || item.id}
         />
       )}
+
+      <Toast toast={toast} />
     </div>
   );
 }

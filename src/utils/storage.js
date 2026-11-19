@@ -100,6 +100,9 @@ export const STORAGE_KEYS = {
   // Per-source reliability stats learned from plays.
   // Shape: { [sourceId]: { ok, fail, last } }.
   SOURCE_STATS: "sourceStats",
+  // Per-title memory of which source last delivered a stream.
+  // Shape: { [titleKey]: { src, ts } } where titleKey is e.g. "movie_123".
+  TITLE_SOURCES: "titleSources",
   // Discord Rich Presence
   DISCORD_RPC_ENABLED: "discordRpcEnabled",
   DISCORD_RPC_SHOW_COVER: "discordRpcShowCover",
@@ -167,6 +170,31 @@ export const sourceScore = (sourceId) => {
   const s = getSourceStats()[sourceId];
   const total = (s?.ok || 0) + (s?.fail || 0);
   return total >= 3 ? s.ok / total : null;
+};
+
+// ── Per-title source memory ─────────────────────────────────────────────────
+// When a play produces a stream we remember which source delivered it for
+// that title, so the next visit can default the picker to it. Single
+// storage key, capped — oldest entries evicted first (LRU-style).
+const TITLE_SOURCES_MAX = 200;
+
+export const getTitleSource = (titleKey) => {
+  const map = storage.get(STORAGE_KEYS.TITLE_SOURCES) || {};
+  return map[titleKey]?.src || null;
+};
+
+export const recordTitleSource = (titleKey, sourceId) => {
+  if (!titleKey || !sourceId) return;
+  const map = storage.get(STORAGE_KEYS.TITLE_SOURCES) || {};
+  // Re-insert so recently-used titles move to the end
+  delete map[titleKey];
+  const keys = Object.keys(map);
+  if (keys.length >= TITLE_SOURCES_MAX) {
+    const evict = keys.slice(0, keys.length - TITLE_SOURCES_MAX + 1);
+    evict.forEach((k) => delete map[k]);
+  }
+  map[titleKey] = { src: sourceId, ts: Date.now() };
+  storage.set(STORAGE_KEYS.TITLE_SOURCES, map);
 };
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

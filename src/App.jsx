@@ -54,6 +54,17 @@ import {
   DEFAULT_UPDATE_SOURCE,
 } from "./utils/updates";
 
+// Video extensions accepted by drag-and-drop local playback — the
+// "open-path-at-time" IPC validates again main-side before playing.
+const DROPPABLE_VIDEO_EXTS = new Set([
+  "mp4",
+  "mkv",
+  "webm",
+  "avi",
+  "mov",
+  "m4v",
+]);
+
 export default function App() {
   // apiKey loaded async from secure storage (OS keychain)
   const [apiKey, setApiKey] = useState(null);
@@ -69,6 +80,10 @@ export default function App() {
   );
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [platform, setPlatform] = useState(null);
+
+  // Drag-and-drop local file playback (see handleFileDrop below)
+  const [dropActive, setDropActive] = useState(false);
+  const dragDepthRef = useRef(0);
 
   // Navigation history stack for Ctrl+Z back navigation
   const [navStack, setNavStack] = useState([]);
@@ -775,6 +790,54 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2500);
   }, []);
 
+  // ── Drag-and-drop local file playback ──────────────────────────────────
+  // Dropping a video file anywhere in the window sends it through the same
+  // "play local file" pipeline the Downloads page uses (mpv → VLC → the
+  // built-in player window when no external player is installed).
+  const handleFileDragEnter = useCallback((e) => {
+    if (!Array.from(e.dataTransfer?.types || []).includes("Files")) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setDropActive(true);
+  }, []);
+
+  const handleFileDragOver = useCallback((e) => {
+    if (!Array.from(e.dataTransfer?.types || []).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleFileDragLeave = useCallback(() => {
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setDropActive(false);
+    }
+  }, []);
+
+  const handleFileDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      dragDepthRef.current = 0;
+      setDropActive(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      const ext = file.name?.split(".").pop()?.toLowerCase();
+      if (!DROPPABLE_VIDEO_EXTS.has(ext)) {
+        showToast("Drop a video file to play it");
+        return;
+      }
+      // File.path was removed in Electron 32+ — resolve via webUtils
+      // (exposed as getPathForFile in preload); file.path is the fallback.
+      const filePath = window.electron?.getPathForFile
+        ? window.electron.getPathForFile(file)
+        : file.path;
+      if (!filePath || !window.electron?.openPathAtTime) return;
+      window.electron.openPathAtTime(filePath, 0, []);
+    },
+    [showToast],
+  );
+
   const getMediaType = useCallback(
     (item) => item.media_type || (item.first_air_date ? "tv" : "movie"),
     [],
@@ -1008,7 +1071,17 @@ export default function App() {
   return (
     <ErrorBoundary>
       {hasCustomTitlebar && <WindowTitlebar />}
-      <div>
+      <div
+        onDragEnter={handleFileDragEnter}
+        onDragOver={handleFileDragOver}
+        onDragLeave={handleFileDragLeave}
+        onDrop={handleFileDrop}
+      >
+        {dropActive && (
+          <div className="drop-overlay">
+            <div className="drop-overlay__box">Drop a video to play</div>
+          </div>
+        )}
         <Sidebar
           page={page}
           onNavigate={navigate}

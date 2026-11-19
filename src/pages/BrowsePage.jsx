@@ -190,6 +190,32 @@ export default function BrowsePage({
           >
             🎲 Surprise
           </button>
+          <button
+            className="browse-chip"
+            title="A well-rated random pick for tonight (6.5+ from the popular catalog)"
+            onClick={async () => {
+              for (let tries = 0; tries < 3; tries++) {
+                try {
+                  const page = 1 + Math.floor(Math.random() * 10);
+                  const d = await tmdbFetch(
+                    `/discover/${type}?sort_by=popularity.desc&page=${page}`,
+                    apiKey,
+                  );
+                  const pool = (d?.results || [])
+                    .map((i) => ({ ...i, media_type: type }))
+                    .filter((i) => (i.vote_average || 0) >= 6.5);
+                  if (pool.length) {
+                    onSelect(
+                      pool[Math.floor(Math.random() * pool.length)],
+                    );
+                    return;
+                  }
+                } catch {}
+              }
+            }}
+          >
+            🌙 Tonight
+          </button>
         </div>
 
         <div className="browse-genres">

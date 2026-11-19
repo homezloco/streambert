@@ -354,6 +354,14 @@ export default function AdultPage() {
   const [hideSeen, setHideSeen] = useState(
     () => storage.get("adultHideSeen") === true,
   );
+  // Grid density for the Browse view — "s" | "m" | "l", persisted
+  const [gridSize, _setGridSize] = useState(
+    () => storage.get("adultGridSize") || "m",
+  );
+  const setGridSize = (v) => {
+    storage.set("adultGridSize", v);
+    _setGridSize(v);
+  };
   // Random pick — prefers unwatched, and never re-picks the current video
   const pickSurprise = () => {
     if (!videos.length) return;
@@ -1270,9 +1278,25 @@ export default function AdultPage() {
             >
               🎲 Surprise
             </button>
+            <span className="adult-grid-size" title="Grid density">
+              {[
+                { id: "s", label: "S", desc: "Small cards" },
+                { id: "m", label: "M", desc: "Medium cards" },
+                { id: "l", label: "L", desc: "Large cards" },
+              ].map((o) => (
+                <button
+                  key={o.id}
+                  className={`browse-chip${gridSize === o.id ? " browse-chip--active" : ""}`}
+                  title={o.desc}
+                  onClick={() => setGridSize(o.id)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </span>
           </div>
 
-          <div className="adult-grid">
+          <div className={`adult-grid adult-grid--${gridSize}`}>
             {videos
               .filter(
                 (v) => !hideSeen || !recents.some((r) => r.id === v.id),

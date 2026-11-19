@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, webFrame } = require("electron");
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("electron", {
   // Cleaned Chromium UA (no Electron/app tokens)
@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld("electron", {
       seconds,
       subtitlePaths,
     }),
+  // Resolve the absolute path of a File from a drag-drop event
+  // (File.path was removed in Electron 32+; webUtils is the replacement)
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   openStreamExternal: (args) => ipcRenderer.invoke("open-stream-external", args),
   pruneSubtitlePaths: (downloadId) =>
     ipcRenderer.invoke("prune-subtitle-paths", { downloadId }),

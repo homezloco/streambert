@@ -19,6 +19,7 @@ const path = require("path");
 const dns = require("dns").promises;
 const netMod = require("net");
 const crypto = require("crypto");
+const os = require("os");
 
 const BASE_URL = "https://hianime.at";
 const USER_AGENT =
@@ -500,10 +501,11 @@ async function cachedEpisodes(showId) {
 // Referer. HLS playlists are rewritten so every sub-playlist, segment, key and
 // audio rendition is proxied too.
 //
-// Hardening: the server only listens on 127.0.0.1, every route needs a random
-// per-session token (so other local processes / web pages cannot use it as an
-// open proxy), the Host header must match (DNS-rebinding), proxied targets must
-// be public http(s) hosts, and the player page runs under a strict CSP.
+// Hardening: the server listens on all interfaces so LAN browsers can play
+// ("/tv" route), every route needs a random per-session token (so other local
+// processes / web pages cannot use it as an open proxy), the Host header must
+// be a loopback/LAN name on our port (DNS-rebinding), proxied targets must be
+// public http(s) hosts, and the player page runs under a strict CSP.
 
 let _playerServer = null;
 let _serverToken = crypto.randomBytes(24).toString("hex");
@@ -598,7 +600,11 @@ function buildPlayerHtml(videoUrl, startTime, subtitleUrl, nonce, opts = {}) {
 video::cue{font-size:var(--cuesz,1.15em)}
 #gear{position:absolute;right:16px;bottom:64px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:15px;cursor:pointer;opacity:.85}
 #pip{position:absolute;right:16px;bottom:106px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;opacity:.85}
-#gear:hover,#pip:hover{opacity:1}
+#tv{position:absolute;right:16px;bottom:148px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;opacity:.85}
+#gear:hover,#pip:hover,#tv:hover{opacity:1}
+#tvpanel{position:absolute;inset:0;z-index:35;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
+#tvpanel[hidden]{display:none}
+#tvpanel iframe{width:380px;height:500px;max-width:92vw;max-height:88vh;border:0;border-radius:10px;background:#fff}
 #menu{position:absolute;right:16px;bottom:108px;z-index:10;background:rgba(15,15,15,.92);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px;min-width:150px;font:13px/1.6 system-ui,sans-serif;color:#eee;max-height:60vh;overflow:auto}
 #menu .sec{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#999;margin:6px 4px 2px}
 #menu .sec:first-child{margin-top:0}
@@ -623,6 +629,8 @@ video::cue{font-size:var(--cuesz,1.15em)}
 <div id="seekbar"><div class="rail"><div id="seekbuf"></div><div id="seekfill"></div></div><div id="thumb"><canvas id="tc" width="160" height="90"></canvas><div id="ttime"></div></div></div>
 <button id="gear" title="Quality & speed">&#9881;</button>
 <button id="pip" title="Picture in picture">&#9719;</button>
+<button id="tv" title="Play on TV">&#128250;</button>
+<div id="tvpanel" hidden><iframe id="tvf" title="Play on TV"></iframe></div>
 <div id="toast" style="display:none;position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:40;background:rgba(15,15,15,.9);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 14px;font:13px system-ui,sans-serif;color:#eee"></div>
 <div id="help" hidden><b>Shortcuts</b>
 <span>&larr;/&rarr;</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
@@ -869,6 +877,15 @@ video::cue{font-size:var(--cuesz,1.15em)}
   };
   pipBtn.addEventListener('click',(e)=>{e.stopPropagation();togglePip();});
   if(document.pictureInPictureEnabled===false)pipBtn.style.display='none';
+  // ── Play on TV: overlay embeds /tv (QR + LAN URL) for other devices ──
+  const tvPanel=document.getElementById('tvpanel');
+  const tvFrame=document.getElementById('tvf');
+  document.getElementById('tv').addEventListener('click',(e)=>{
+    e.stopPropagation();
+    tvPanel.hidden=!tvPanel.hidden;
+    if(!tvPanel.hidden)tvFrame.src='/tv?t='+new URLSearchParams(location.search).get('t');
+  });
+  tvPanel.addEventListener('click',(e)=>{if(e.target===tvPanel)tvPanel.hidden=true;});
   // Sleep timer — pause playback after N minutes
   const sleepBox=document.getElementById('sleepopts');
   const sleepInfo=document.getElementById('sleepinfo');
@@ -1293,15 +1310,69 @@ function loadHlsJs() {
   return _hlsJs;
 }
 
+// Host-header gate (DNS-rebinding): the port must be ours and the name must
+// be loopback, a LAN/private address, *.local or this machine's hostname —
+// public domains pointed at this server are still rejected.
+function isLanHost(h) {
+  h = String(h || "")
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (h === "localhost" || h === "127.0.0.1" || h.endsWith(".local"))
+    return true;
+  if (h === String(os.hostname()).toLowerCase()) return true;
+  if (netMod.isIPv6(h)) return isPrivateIp(h);
+  if (!netMod.isIPv4(h)) return false;
+  const [a, b] = h.split(".").map(Number);
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+// First non-internal IPv4 — advertised on /tv so LAN browsers can reach us
+function lanAddress() {
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const it of list || []) {
+      if ((it.family === "IPv4" || it.family === 4) && !it.internal) {
+        return it.address;
+      }
+    }
+  }
+  return null;
+}
+
+function buildTvHtml(playerUrl, qrDataUrl) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;background:#101014;color:#eee;font:16px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+h1{font-size:18px;font-weight:600}
+img{background:#fff;border-radius:10px;padding:10px;width:280px;height:280px}
+.url{font-size:21px;font-weight:600;word-break:break-all;color:#ff4d4d;max-width:34em}
+.note{color:#999;font-size:13px;max-width:34em}</style>
+</head><body>
+<h1>Play on TV</h1>
+${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR code">` : ""}
+<div class="url">${escapeHtmlAttr(playerUrl || "No LAN address found")}</div>
+<div class="note">${qrDataUrl ? "Scan the code or open the address in a browser on this network." : "QR code unavailable — type the address into a browser on this network."}</div>
+</body></html>`;
+}
+
 function getPlayerServer() {
   if (_playerServer) return Promise.resolve(_playerServer);
   return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
       // DNS-rebinding guard + token check (POST only for /progress)
       const port = server.address()?.port;
+      const hostHeader = String(req.headers.host || "");
+      const hSep = hostHeader.lastIndexOf(":");
       if (
         (req.method !== "GET" && req.method !== "POST") ||
-        req.headers.host !== `127.0.0.1:${port}`
+        hSep < 0 ||
+        hostHeader.slice(hSep + 1) !== String(port) ||
+        !isLanHost(hostHeader.slice(0, hSep))
       ) {
         res.writeHead(403);
         res.end();
@@ -1379,7 +1450,8 @@ function getPlayerServer() {
           "Content-Security-Policy":
             `default-src 'none'; script-src 'self' 'nonce-${nonce}'; ` +
             "style-src 'unsafe-inline'; media-src 'self' blob:; " +
-            "connect-src 'self'; worker-src blob:; img-src 'self' data:",
+            "connect-src 'self'; worker-src blob:; img-src 'self' data:; " +
+            "frame-src 'self'",
         });
         res.end(
           buildPlayerHtml(
@@ -1390,6 +1462,34 @@ function getPlayerServer() {
             { isFile: !!_currentVideoFile, subtitles: _currentVideoSubtitles },
           ),
         );
+        return;
+      }
+
+      // ── Play on TV: QR + LAN URL other devices on the network can open ──
+      if (url.pathname === "/tv") {
+        const lan = lanAddress();
+        const playerUrl = lan
+          ? `http://${lan}:${port}/player?t=${_serverToken}`
+          : null;
+        let qrDataUrl = null;
+        if (playerUrl) {
+          try {
+            // optional dependency — falls back to URL-as-text when absent
+            qrDataUrl = await require("qrcode").toDataURL(playerUrl, {
+              margin: 1,
+              width: 280,
+            });
+          } catch {}
+        }
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "no-referrer",
+          "Content-Security-Policy":
+            "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:",
+        });
+        res.end(buildTvHtml(playerUrl, qrDataUrl));
         return;
       }
 
@@ -1510,7 +1610,7 @@ function getPlayerServer() {
       res.end();
     });
 
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(0, "0.0.0.0", () => {
       _playerServer = server;
       resolve(server);
     });

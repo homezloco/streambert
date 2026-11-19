@@ -6,12 +6,9 @@ Working plan for the next rounds of development. Ordered by value-per-effort wit
 
 ## 1. Playback depth
 
-### 1.1 Play on TV (LAN share) — top pick
-Bind the local player server (`src/ipc/hianime.js`) to `0.0.0.0` in addition to `127.0.0.1`, and add a "Play on TV" button that shows a QR/link (`http://<lan-ip>:<port>/player?t=<token>`). Any TV with a browser (Fire Stick Silk, Android TV, LG/Samsung built-in) can then play the exact same token-gated player — quality, subtitles, resume, A-B repeat all work.
-
-- Server already token-gates every route; binding LAN is safe as long as the token stays unguessable (it is — random per session).
-- Scope: `getPlayerServer` listen call, a small modal in the player header showing URL + QR (generate QR client-side, e.g. `qrcode` npm lib or a tiny hand-rolled encoder).
-- Follow-up: DLNA/UPnP advertisement so TVs' built-in media browsers can discover it.
+### 1.1 ~~Play on TV (LAN share)~~ — DONE
+Shipped: server binds 0.0.0.0, LAN-aware Host check (private ranges + hostname + *.local only), `/tv` route renders QR + URL page, 📺 button in the player opens an in-page QR overlay. `qrcode` npm package installed (graceful text fallback if absent).
+- Remaining follow-up: DLNA/UPnP advertisement so TVs' built-in media browsers can discover it.
 
 ### 1.2 Chromecast sender **[big]**
 Proper Google Cast support. Electron lacks `chrome.cast`; needs a custom Cast-protocol implementation or a companion web app hosted on the LAN server (which 1.1 effectively is). Only worth doing after 1.1 proves the TV-browser path isn't enough.
@@ -41,8 +38,8 @@ Browse tab currently queries only Eporner. Add a "search everywhere" mode that f
 ### 2.2 More embed sources (ongoing)
 Continue probing: vidora, vidplus, vidzee, autoembed mirrors all failed last round — retry periodically, they're flaky. Keep the rule: only add sources verified live.
 
-### 2.3 "Tonight" mode
-One-click pick constrained by filters: runtime < 2h, matching decade/rating prefs, high vote average. Builds on Surprise + decade filter.
+### 2.3 ~~"Tonight" mode~~ — DONE
+🌙 Tonight button on Browse: random popular-catalog page, filters to 6.5+ vote average, picks one. Follow-up idea: runtime cap (<2h) needs per-item detail fetches — could batch-check if worth it.
 
 ### 2.4 Watchlist improvements
 - Sort saved items (date added / release / rating).
@@ -55,11 +52,11 @@ Multi-select genre chips (fetch each genre catalog, intersect by id client-side)
 
 ## 3. Reliability intelligence
 
-### 3.1 Per-title source memory
-Record which source succeeded for a given title (`srcByTitle_<id>` → sourceId, capped LRU). On revisit, preselect it. Cheap, zero UI — pure storage + picker default.
+### 3.1 ~~Per-title source memory~~ — DONE
+`titleSources` LRU map (200 entries) in storage.js; recorded on both success signals (m3u8 captured + video playing); picker defaults to the remembered source unless its reliability score dropped < 0.35.
 
-### 3.2 Failover visibility
-When auto-failover fires, show a transient toast: "VidSrc didn't respond — switched to VidLink". Currently silent; users should know the system worked.
+### 3.2 ~~Failover visibility~~ — DONE
+New `Toast` component + `useToast` hook (`.app-toast`, 3s auto-dismiss); silent source switches in handlePlay/playEpisode now show "X was unreliable — switched to Y".
 
 ### 3.3 Source health dashboard
 Extend the Settings reliability grid: last success timestamp, average time-to-first-stream (record play-start latency per source).
@@ -103,17 +100,17 @@ Extend the adult-section PIN gate (hashPin already in storage.js) to a launch ga
 ### 6.1 Themes
 Dark-only today? Add a light theme and/or additional accent hues (accent is already a CSS var `--red`).
 
-### 6.2 Density switch
-`compact-mode` CSS class already exists — surface it in Settings → Interface.
+### 6.2 ~~Density switch~~ — DONE (already existed)
+Verified: "Compact card grid" toggle in Settings → Interface, persisted, applied on start.
 
 ### 6.3 Global shortcuts sheet
 The `?` overlay exists in the player; add an app-level one (navigation keys, find, surprise).
 
-### 6.4 Drag-and-drop playback
-Drop a local video file anywhere in the window → open it in the native player via `setPlayerFile` (path from the drop event; validate extension + readability).
+### 6.4 ~~Drag-and-drop playback~~ — DONE
+Drop a video file anywhere → `openPathAtTime` pipeline (mpv → VLC → built-in player window). Uses `webUtils.getPathForFile` (new preload expose) with drop overlay hint.
 
-### 6.5 Adult grid density toggle
-Small/standard/large thumbnail sizes for adult Browse (grid min-width var).
+### 6.5 ~~Adult grid density toggle~~ — DONE
+S/M/L chips in the adult filter row, persisted as `adultGridSize` (200/280/360px min).
 
 ---
 

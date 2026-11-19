@@ -69,6 +69,8 @@ import {
   getSourceStats,
   recordSourceResult,
   sourceScore,
+  getTitleSource,
+  recordTitleSource,
 } from "../utils/storage";
 import { useAutoplay } from "../utils/useAutoplay";
 import { fetchAniSkipTimings } from "../utils/aniSkip";
@@ -90,6 +92,7 @@ import { useSourceId } from "../utils/useSourceId";
 import { sortSubsByPref } from "../utils/subtitles";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
+import Toast, { useToast } from "../components/Toast";
 
 // ── Partial-circle progress icon (cached per pct tier) ───────────────────────
 // Uses a single SVG arc. Three instances (25/50/75)
@@ -459,6 +462,10 @@ export default function TVPage({
   // Mirrors for effects/handlers with empty deps
   const playerSourceRef = useRef(playerSource);
   playerSourceRef.current = playerSource;
+  // Per-title source memory key (title-level, not per-episode)
+  const titleKey = `tv_${item.id}`;
+  const titleKeyRef = useRef(titleKey);
+  titleKeyRef.current = titleKey;
   // Source reliability: true once this play produced a stream or video
   const statsOkRef = useRef(false);
   // Guard: at most one stats-driven auto-switch per play
@@ -504,6 +511,8 @@ export default function TVPage({
   const [episodeGroupMap, setEpisodeGroupMap] = useState(null); // Map built from TMDB episode group
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
+  // Small non-blocking notice (e.g. silent source failover)
+  const [toast, showToast] = useToast();
 
   // ID the selected source expects (TMDB id, or converted IMDb id)
   const srcId = useSourceId(playerSource, "tv", item.id, apiKey);
@@ -823,6 +832,19 @@ export default function TVPage({
     }
   }, [playerSource]);
 
+  // Per-title source memory: if a previous play on this title succeeded on a
+  // specific source, default the picker to it — unless that source has since
+  // proven unreliable (score < 0.35) or can't play series.
+  useEffect(() => {
+    const remembered = getTitleSource(titleKey);
+    if (!remembered || remembered === playerSourceRef.current) return;
+    const src = PLAYER_SOURCES.find((s) => s.id === remembered);
+    if (!src || src.movieOnly) return;
+    const sc = sourceScore(remembered);
+    if (sc !== null && sc < 0.35) return;
+    setPlayerSource(remembered);
+  }, [item.id, titleKey]);
+
   // Resolve HiAnime episode URL via main-process IPC (scraping, no CORS)
   useEffect(() => {
     if (!playing || !selectedEp) return;
@@ -929,9 +951,11 @@ export default function TVPage({
     const handler = window.electron.onM3u8Found((url) => {
       setM3u8Url((prev) => (prev !== url ? url : prev));
       // A real stream URL means the source delivered — count it once per play
+      // and remember it for this title
       if (!statsOkRef.current) {
         statsOkRef.current = true;
         recordSourceResult(playerSourceRef.current, true);
+        recordTitleSource(titleKeyRef.current, playerSourceRef.current);
       }
     });
     return () => window.electron.offM3u8Found(handler);
@@ -1630,6 +1654,7 @@ export default function TVPage({
             if (ct > 2 && !statsOkRef.current) {
               statsOkRef.current = true;
               recordSourceResult(playerSource, true);
+              recordTitleSource(titleKey, playerSource);
             }
 
             // Resume: player started near the beginning but we have a saved
@@ -1851,6 +1876,12 @@ export default function TVPage({
           }
         }
         if (best && bestScore >= 0.6) {
+          const fromLabel =
+            PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
+            playerSource;
+          const toLabel =
+            PLAYER_SOURCES.find((s) => s.id === best)?.label ?? best;
+          showToast(`${fromLabel} was unreliable — switched to ${toLabel}`);
           setPlayerSource(best);
           storage.set(STORAGE_KEYS.PLAYER_SOURCE, best);
         }
@@ -1875,7 +1906,7 @@ export default function TVPage({
       });
       // d and selectedSeason are stable within a season view; onHistory is useCallback in App
     },
-    [d, selectedSeason, onHistory, playerSource],
+    [d, selectedSeason, onHistory, playerSource, showToast],
   );
 
   const nextEp = useMemo(() => {
@@ -3035,6 +3066,8 @@ export default function TVPage({
           tmdbId={details?.moviedb_id || item.id}
         />
       )}
+
+      <Toast toast={toast} />
     </div>
   );
 }
