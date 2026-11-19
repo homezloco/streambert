@@ -354,6 +354,19 @@ export default function AdultPage() {
   const [hideSeen, setHideSeen] = useState(
     () => storage.get("adultHideSeen") === true,
   );
+  // Random pick — prefers unwatched, and never re-picks the current video
+  const pickSurprise = () => {
+    if (!videos.length) return;
+    const seenIds = new Set(recents.map((r) => r.id));
+    if (playing) seenIds.add(playing.id);
+    const fresh = videos.filter((v) => !seenIds.has(v.id));
+    const pool = fresh.length
+      ? fresh
+      : videos.filter((v) => v.id !== playing?.id);
+    const list = pool.length ? pool : videos;
+    setPlaying(list[Math.floor(Math.random() * list.length)]);
+  };
+
   const [videos, setVideos] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -829,6 +842,14 @@ export default function AdultPage() {
           <span className="adult-playing-title">{playing.title}</span>
           <button
             className="btn btn-ghost dl-btn--sm"
+            disabled={!videos.length}
+            title="Roll another random video"
+            onClick={pickSurprise}
+          >
+            🎲 Again
+          </button>
+          <button
+            className="btn btn-ghost dl-btn--sm"
             disabled={!dlUrl}
             title={
               dlUrl
@@ -1245,12 +1266,7 @@ export default function AdultPage() {
               className="browse-chip"
               title="Play a random video (prefers unwatched)"
               disabled={!videos.length}
-              onClick={() => {
-                const seenIds = new Set(recents.map((r) => r.id));
-                const fresh = videos.filter((v) => !seenIds.has(v.id));
-                const pool = fresh.length ? fresh : videos;
-                setPlaying(pool[Math.floor(Math.random() * pool.length)]);
-              }}
+              onClick={pickSurprise}
             >
               🎲 Surprise
             </button>

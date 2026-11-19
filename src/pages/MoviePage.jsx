@@ -384,6 +384,26 @@ export default function MoviePage({
     };
   }, [item.id, details?.genres?.[0]?.id, apiKey]);
 
+  // Surprise: roll again — random popular-catalog page → random movie
+  const surprisePick = async () => {
+    for (let tries = 0; tries < 3 && onSelect; tries++) {
+      try {
+        const page = 1 + Math.floor(Math.random() * 10);
+        const d = await tmdbFetch(
+          `/discover/movie?sort_by=popularity.desc&page=${page}`,
+          apiKey,
+        );
+        const pool = (d?.results || [])
+          .map((i) => ({ ...i, media_type: "movie" }))
+          .filter((i) => String(i.id) !== String(item.id));
+        if (pool.length) {
+          onSelect(pool[Math.floor(Math.random() * pool.length)]);
+          return;
+        }
+      } catch {}
+    }
+  };
+
   // Reset m3u8 URL, subtitle URL and source menu whenever the movie or source changes
   useEffect(() => {
     setM3u8Url(null);
@@ -1176,6 +1196,13 @@ export default function MoviePage({
                     )}
                   </>
                 ))}
+              <button
+                className="btn btn-ghost"
+                onClick={surprisePick}
+                title="Jump to a random movie"
+              >
+                🎲 Surprise
+              </button>
               <button className="btn btn-ghost" onClick={onBack}>
                 <BackIcon /> Back
               </button>

@@ -1064,6 +1064,26 @@ export default function TVPage({
   const year = (d.first_air_date || "").slice(0, 4);
   const status = d.status;
 
+  // Surprise: roll again — random popular-catalog page → random series
+  const surprisePick = async () => {
+    for (let tries = 0; tries < 3 && onSelect; tries++) {
+      try {
+        const page = 1 + Math.floor(Math.random() * 10);
+        const data = await tmdbFetch(
+          `/discover/tv?sort_by=popularity.desc&page=${page}`,
+          apiKey,
+        );
+        const pool = (data?.results || [])
+          .map((i) => ({ ...i, media_type: "tv" }))
+          .filter((i) => String(i.id) !== String(item.id));
+        if (pool.length) {
+          onSelect(pool[Math.floor(Math.random() * pool.length)]);
+          return;
+        }
+      } catch {}
+    }
+  };
+
   // ── Season list: prefer episode-group > AniList > TMDB ──────────────────
   // tmdbSeasons excludes specials (season 0) (only for AniList)
   const tmdbSeasons = useMemo(
@@ -2079,6 +2099,13 @@ export default function TVPage({
                   <button className="btn btn-secondary" onClick={onSave}>
                     {isSaved ? <BookmarkFillIcon /> : <BookmarkIcon />}
                     {isSaved ? "Saved" : "Save"}
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={surprisePick}
+                    title="Jump to a random series"
+                  >
+                    🎲 Surprise
                   </button>
                   <button className="btn btn-ghost" onClick={onBack}>
                     <BackIcon /> Back
