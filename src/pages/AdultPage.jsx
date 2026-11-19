@@ -1241,6 +1241,19 @@ export default function AdultPage() {
             >
               Hide seen
             </button>
+            <button
+              className="browse-chip"
+              title="Play a random video (prefers unwatched)"
+              disabled={!videos.length}
+              onClick={() => {
+                const seenIds = new Set(recents.map((r) => r.id));
+                const fresh = videos.filter((v) => !seenIds.has(v.id));
+                const pool = fresh.length ? fresh : videos;
+                setPlaying(pool[Math.floor(Math.random() * pool.length)]);
+              }}
+            >
+              🎲 Surprise
+            </button>
           </div>
 
           <div className="adult-grid">
