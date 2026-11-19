@@ -37,6 +37,7 @@ import SearchModal from "./components/SearchModal";
 import SetupScreen from "./components/SetupScreen";
 import CloseConfirmModal from "./components/CloseConfirmModal";
 import UpdateModal from "./components/UpdateModal";
+import BackToTop from "./components/BackToTop";
 import { useGamepadNav } from "./utils/useGamepadNav";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
@@ -1022,6 +1023,7 @@ export default function App() {
         />
 
         <div className="main">
+          <BackToTop />
           {/* ── API key status banner ── */}
           {/* Suspense boundary: lazy page chunks are fetched on first visit */}
           {apiKeyStatus === "invalid_token" && (

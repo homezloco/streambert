@@ -56,6 +56,7 @@ import {
 } from "../components/Icons";
 import DownloadModal from "../components/DownloadModal";
 import MediaCard from "../components/MediaCard";
+import ScrollRow from "../components/ScrollRow";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
@@ -435,6 +436,7 @@ export default function TVPage({
 }) {
   const [details, setDetails] = useState(null);
   const [similar, setSimilar] = useState(null); // More-like-this row
+  const [ovFull, setOvFull] = useState(false); // expand long overview
   const [seasonData, setSeasonData] = useState(null);
   const [failedSeasons, setFailedSeasons] = useState(() => new Set()); // season numbers which give 404 on TMDB
   const [selectedSeason, setSelectedSeason] = useState(() =>
@@ -2037,7 +2039,19 @@ export default function TVPage({
                     )}
                   </div>
                 )}
-                <p className="detail-overview">{displayOverview}</p>
+                <p
+                  className={`detail-overview${ovFull ? " expanded" : ""}`}
+                >
+                  {displayOverview}
+                </p>
+                {(displayOverview || "").length > 320 && (
+                  <button
+                    className="overview-toggle"
+                    onClick={() => setOvFull((v) => !v)}
+                  >
+                    {ovFull ? "Show less" : "Read more"}
+                  </button>
+                )}
                 <div className="detail-actions">
                   {trailerKey &&
                     (restricted ? (
@@ -2901,7 +2915,7 @@ export default function TVPage({
       {similar && onSelect && (
         <div className="section">
           <div className="section-title">More like this</div>
-          <div className="scroll-row">
+          <ScrollRow>
             {similar.map((s) => (
               <MediaCard
                 key={s.id}
@@ -2913,7 +2927,7 @@ export default function TVPage({
                 onMarkUnwatched={onMarkUnwatched}
               />
             ))}
-          </div>
+          </ScrollRow>
         </div>
       )}
 

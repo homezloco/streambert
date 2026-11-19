@@ -51,6 +51,7 @@ import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import MediaCard from "../components/MediaCard";
+import ScrollRow from "../components/ScrollRow";
 import {
   storage,
   STORAGE_KEYS,
@@ -160,6 +161,7 @@ export default function MoviePage({
   const nativeSwapRef = useRef(false);
   const [collection, setCollection] = useState(null); // { name, parts }
   const [similar, setSimilar] = useState(null); // More-like-this row
+  const [ovFull, setOvFull] = useState(false); // expand long overview
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
 
@@ -1071,7 +1073,17 @@ export default function MoviePage({
                 )}
               </div>
             )}
-            <p className="detail-overview">{displayOverview}</p>
+            <p className={`detail-overview${ovFull ? " expanded" : ""}`}>
+              {displayOverview}
+            </p>
+            {(displayOverview || "").length > 320 && (
+              <button
+                className="overview-toggle"
+                onClick={() => setOvFull((v) => !v)}
+              >
+                {ovFull ? "Show less" : "Read more"}
+              </button>
+            )}
             {!isWatched && displayPct > 0 && (
               <div className="progress-bar-row" style={{ marginBottom: 12 }}>
                 <div className="progress-bar-outer">
@@ -1581,7 +1593,7 @@ export default function MoviePage({
       {collection && onSelect && (
         <div className="section">
           <div className="section-title">{collection.name}</div>
-          <div className="scroll-row">
+          <ScrollRow>
             {collection.parts.map((part) => {
               const pk = `movie_${part.id}`;
               const isCurrent = part.id === item.id;
@@ -1599,14 +1611,14 @@ export default function MoviePage({
                 />
               );
             })}
-          </div>
+          </ScrollRow>
         </div>
       )}
 
       {similar && onSelect && (
         <div className="section">
           <div className="section-title">More like this</div>
-          <div className="scroll-row">
+          <ScrollRow>
             {similar.map((s) => (
               <CollectionCard
                 key={s.id}
@@ -1619,7 +1631,7 @@ export default function MoviePage({
                 onMarkUnwatched={onMarkUnwatched}
               />
             ))}
-          </div>
+          </ScrollRow>
         </div>
       )}
 

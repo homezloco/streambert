@@ -137,6 +137,7 @@ export default function BrowsePage({
   return (
     <div className="fade-in" style={{ paddingBottom: 40 }}>
       <div className="section">
+        <div className="browse-sticky">
         <div className="browse-head">
           <div className="section-title" style={{ marginBottom: 0 }}>
             Browse
@@ -215,10 +216,13 @@ export default function BrowsePage({
             </button>
           ))}
         </div>
+        </div>
 
         {items.length === 0 && loading && (
-          <div className="loader">
-            <div className="spinner" />
+          <div className="cards-grid">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="card-skeleton" />
+            ))}
           </div>
         )}
         {items.length === 0 && !loading && (
