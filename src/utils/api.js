@@ -464,6 +464,35 @@ export const PLAYER_SOURCES = [
       `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`,
   },
   {
+    id: "smashystream",
+    label: "Smashy",
+    tag: null,
+    note: "Multi-server",
+    supportsProgress: true,
+    progressViaFrames: true, // nested provider iframes
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${season}&episode=${ep}`,
+  },
+  {
+    id: "vidprime",
+    label: "VidPrime",
+    tag: null,
+    note: null,
+    supportsProgress: true,
+    progressViaFrames: true,
+    colorParam: null,
+    langParam: null,
+    idType: "imdb",
+    params: {},
+    movieUrl: (id) => `https://vidsrc.pm/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://vidsrc.pm/embed/tv/${id}/${season}-${ep}`,
+  },
+  {
     id: "hianime",
     label: "HiAnime",
     tag: "ANIME",
