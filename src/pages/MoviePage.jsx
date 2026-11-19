@@ -80,6 +80,7 @@ import {
 } from "../utils/playerGamepadScript";
 import { useSourceId } from "../utils/useSourceId";
 import { sortSubsByPref } from "../utils/subtitles";
+import { playerDefaults } from "../utils/playerPrefs";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
 import Toast, { useToast } from "../components/Toast";
@@ -523,6 +524,7 @@ export default function MoviePage({
                 referer: res.referer || "https://hianime.at/",
                 subtitle: res.subtitle || null,
                 startTime,
+                prefs: playerDefaults(),
               })
               .then((r) => {
                 if (!mounted) return;
@@ -652,6 +654,7 @@ export default function MoviePage({
         subtitle: sub?.url || null,
         subtitles: subsSorted,
         startTime,
+        prefs: playerDefaults(),
       })
       .then((r) => {
         if (r?.ok && r.playerUrl) {

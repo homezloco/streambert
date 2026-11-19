@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { storage, hashPin } from "../utils/storage";
 import { sortSubsByPref } from "../utils/subtitles";
+import { playerDefaults } from "../utils/playerPrefs";
 import { searchAllSites } from "../utils/adultSearch";
 import { WarningIcon } from "../components/Icons";
 import ScrollRow from "../components/ScrollRow";
@@ -665,6 +666,7 @@ export default function AdultPage() {
       subtitle: subsSorted[0]?.url || null,
       subtitles: subsSorted,
       startTime,
+      prefs: playerDefaults(),
     });
     if (res?.ok && res.playerUrl) {
       try {

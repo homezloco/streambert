@@ -9,6 +9,7 @@ import {
   SubtitlesIcon,
 } from "../components/Icons";
 import { storage, isElectron, STORAGE_KEYS } from "../utils/storage";
+import { playerDefaults } from "../utils/playerPrefs";
 import SubtitleDownloaderModal from "../components/SubtitleDownloaderModal";
 import { imgUrl } from "../utils/api";
 
@@ -626,6 +627,7 @@ export default function DownloadsPage({
                       dl.filePath,
                       0,
                       subtitlePaths || [],
+                      playerDefaults(),
                     )
                   }
                   onHistory={onHistory}
@@ -981,6 +983,7 @@ const LocalFileCard = memo(function LocalFileCard({
         dl.filePath,
         savedSecs || 0,
         dl.subtitlePaths,
+        playerDefaults(),
       );
     } else {
       onWatch(dl.subtitlePaths);

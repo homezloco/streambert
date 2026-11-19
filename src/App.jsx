@@ -30,6 +30,7 @@ import {
   CINEMETA_KEY,
 } from "./utils/api";
 import { clearAppCaches } from "./utils/storage";
+import { playerDefaults } from "./utils/playerPrefs";
 import {
   readDiscordRpcSettings,
   applyDiscordRpcEnabled,
@@ -862,7 +863,7 @@ export default function App() {
         ? window.electron.getPathForFile(file)
         : file.path;
       if (!filePath || !window.electron?.openPathAtTime) return;
-      window.electron.openPathAtTime(filePath, 0, []);
+      window.electron.openPathAtTime(filePath, 0, [], playerDefaults());
     },
     [showToast],
   );

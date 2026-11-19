@@ -51,11 +51,12 @@ contextBridge.exposeInMainWorld("electron", {
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   openPath: (filePath) => ipcRenderer.invoke("open-path", filePath),
   getInstallPath: () => ipcRenderer.invoke("get-install-path"),
-  openPathAtTime: (filePath, seconds, subtitlePaths) =>
+  openPathAtTime: (filePath, seconds, subtitlePaths, prefs) =>
     ipcRenderer.invoke("open-path-at-time", {
       filePath,
       seconds,
       subtitlePaths,
+      prefs,
     }),
   // Resolve the absolute path of a File from a drag-drop event
   // (File.path was removed in Electron 32+; webUtils is the replacement)

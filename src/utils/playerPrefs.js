@@ -1,0 +1,28 @@
+// Configured player defaults (Settings → player defaults). Each value is
+// optional; anything absent or invalid is omitted so the generated player
+// page falls back to its "remember last" cookie behaviour.
+//
+// Keys read:  playerDefRate, playerDefVol, playerDefMuted,
+//             playerDefCueSize, playerDefSubOff
+// Keys emit:  { rate, vol, muted, cueSize, subOff }
+
+import { storage } from "./storage";
+
+const numInRange = (v, lo, hi) =>
+  typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi
+    ? v
+    : undefined;
+
+export function playerDefaults() {
+  const prefs = {};
+  const rate = numInRange(storage.get("playerDefRate"), 0.25, 4);
+  if (rate !== undefined) prefs.rate = rate;
+  const vol = numInRange(storage.get("playerDefVol"), 0, 1);
+  if (vol !== undefined) prefs.vol = vol;
+  if (storage.get("playerDefMuted") === true) prefs.muted = true;
+  const cueSize = numInRange(storage.get("playerDefCueSize"), 0.5, 3);
+  if (cueSize !== undefined) prefs.cueSize = cueSize;
+  const subOff = numInRange(storage.get("playerDefSubOff"), -30, 30);
+  if (subOff !== undefined) prefs.subOff = subOff;
+  return prefs;
+}

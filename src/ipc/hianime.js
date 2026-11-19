@@ -520,6 +520,9 @@ function setProgressListener(fn) {
   _progressListener = typeof fn === "function" ? fn : null;
 }
 let _currentVideoStartTime = 0;
+// Configured player defaults for the next play (Settings → renderer → IPC).
+// Anything absent falls back to the player page's cookie-remembered values.
+let _currentVideoPrefs = {};
 // Registered local file + subtitle file for the /file and /sub routes.
 // The server only ever serves what was registered via setPlayerFile —
 // no arbitrary path param, so it can't become a file-read primitive.
@@ -663,14 +666,17 @@ video::cue{font-size:var(--cuesz,1.15em)}
   const src=${jsonForScript(isFile ? `/file?t=${_serverToken}` : proxied(videoUrl))};
   const startTime=${start};
   const isFile=${isFile ? "true" : "false"};
+  // Configured defaults from Settings — when present they override the
+  // remembered (cookie) values below; cookie writes on user changes stay.
+  const DEF=${jsonForScript(opts.prefs || {})};
   // Persist playback speed + volume across sessions via host-scoped cookies
   // (cookies ignore the player's random port where localStorage wouldn't)
   const ck=(n)=>{const m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?decodeURIComponent(m[1]):null};
-  const svRate=parseFloat(ck('sb_rate'));
+  const svRate=(DEF.rate!=null?DEF.rate:parseFloat(ck('sb_rate')));
   if(svRate>=0.25&&svRate<=4)video.playbackRate=svRate;
-  const svVol=parseFloat(ck('sb_vol'));
+  const svVol=(DEF.vol!=null?DEF.vol:parseFloat(ck('sb_vol')));
   if(svVol>=0&&svVol<=1)video.volume=svVol;
-  if(ck('sb_muted')==='1')video.muted=true;
+  if(DEF.muted===true||ck('sb_muted')==='1')video.muted=true;
   video.addEventListener('ratechange',()=>{document.cookie='sb_rate='+video.playbackRate+';path=/;max-age=31536000'});
   video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000';document.cookie='sb_muted='+(video.muted?1:0)+';path=/;max-age=31536000'});
   // Report position back so the app can offer resume on the next open
@@ -836,7 +842,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
   }
   // ── Subtitle sync: refetch the active track, shift cue timestamps by
   // subShift seconds, and swap in a shifted Blob URL (persisted via cookie)
-  let subShift=parseFloat(ck('sb_suboff'))||0;
+  let subShift=(DEF.subOff!=null?DEF.subOff:parseFloat(ck('sb_suboff')))||0;
   const origSrc={};
   async function applyShift(){
     const tt=video.textTracks;let idx=-1;
@@ -904,12 +910,13 @@ video::cue{font-size:var(--cuesz,1.15em)}
     document.cookie='sb_cuesz='+sz+';path=/;max-age=31536000';
     [...szBox.children].forEach(x=>x.classList.toggle('on',x===b));
   };
+  const initCueSz=(DEF.cueSize!=null?DEF.cueSize+'em':ck('sb_cuesz'));
   [['S','0.75em'],['M','1.15em'],['L','1.7em']].forEach(([l,sz])=>{
     const b=document.createElement('button');b.textContent=l;
     b.onclick=()=>{setCue(sz,b);menu.hidden=true;};szBox.appendChild(b);
-    if(ck('sb_cuesz')===sz)b.classList.add('on');
+    if(initCueSz===sz)b.classList.add('on');
   });
-  if(ck('sb_cuesz'))document.documentElement.style.setProperty('--cuesz',ck('sb_cuesz'));
+  if(initCueSz)document.documentElement.style.setProperty('--cuesz',initCueSz);
   // Picture-in-picture (Chromium PiP floats the video over other windows)
   const pipBtn=document.getElementById('pip');
   const togglePip=()=>{
@@ -1502,7 +1509,11 @@ function getPlayerServer() {
             _currentVideoStartTime || 0,
             _currentVideoFile ? !!_currentSubtitleFile : _currentVideoSubtitle,
             nonce,
-            { isFile: !!_currentVideoFile, subtitles: _currentVideoSubtitles },
+            {
+              isFile: !!_currentVideoFile,
+              subtitles: _currentVideoSubtitles,
+              prefs: _currentVideoPrefs,
+            },
           ),
         );
         return;
@@ -1721,6 +1732,27 @@ const asPosInt = (v, fallback) => {
   return Number.isFinite(n) && n >= 0 && n < 100000 ? n : fallback;
 };
 
+// Whitelist + range-check the renderer-supplied player defaults — the values
+// are embedded verbatim into the generated player page (`const DEF=…`).
+function sanitizePlayerPrefs(p) {
+  const out = {};
+  if (!p || typeof p !== "object") return out;
+  const num = (v, lo, hi) =>
+    typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi
+      ? v
+      : undefined;
+  let v = num(p.rate, 0.25, 4);
+  if (v !== undefined) out.rate = v;
+  v = num(p.vol, 0, 1);
+  if (v !== undefined) out.vol = v;
+  if (p.muted === true) out.muted = true;
+  v = num(p.cueSize, 0.5, 3);
+  if (v !== undefined) out.cueSize = v;
+  v = num(p.subOff, -30, 30);
+  if (v !== undefined) out.subOff = v;
+  return out;
+}
+
 // ── IPC registration ──────────────────────────────────────────────────────────
 
 // Register a video URL with the local player server. Works for any public
@@ -1756,6 +1788,7 @@ async function setPlayerVideo(args = {}) {
   _currentVideoSubtitle = subtitle;
   _currentVideoSubtitles = subtitles;
   _currentVideoStartTime = asPosInt(args.startTime, 0);
+  _currentVideoPrefs = sanitizePlayerPrefs(args.prefs);
   _currentVideoFile = null;
   _currentSubtitleFile = null;
   const server = await getPlayerServer();
@@ -1788,6 +1821,7 @@ async function setPlayerFile(args = {}) {
   _currentVideoSubtitle = null;
   _currentVideoSubtitles = [];
   _currentVideoStartTime = asPosInt(args.startTime, 0);
+  _currentVideoPrefs = sanitizePlayerPrefs(args.prefs);
   const server = await getPlayerServer();
   return {
     ok: true,

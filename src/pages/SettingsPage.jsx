@@ -14,6 +14,7 @@ import {
   clearTmdbCache,
   CINEMETA_KEY,
   PLAYER_SOURCES,
+  NON_ANIME_DEFAULT_SOURCE,
 } from "../utils/api";
 import {
   ACCENT_PRESETS,
@@ -1703,6 +1704,12 @@ function LibraryPrivacySection() {
   const [sort, setSort] = useState(
     () => storage.get(STORAGE_KEYS.LIBRARY_SORT) || "manual",
   );
+  const [savedSort, setSavedSort] = useState(
+    () => storage.get("libSavedSort") || "added",
+  );
+  const [historySort, setHistorySort] = useState(
+    () => storage.get("libHistorySort") || "recent",
+  );
   const [historyEnabled, setHistoryEnabled] = useState(() => {
     const v = storage.get(STORAGE_KEYS.HISTORY_ENABLED);
     return v === 0 || v === false ? false : true;
@@ -1711,6 +1718,8 @@ function LibraryPrivacySection() {
 
   const handleSave = () => {
     storage.set(STORAGE_KEYS.LIBRARY_SORT, sort);
+    storage.set("libSavedSort", savedSort);
+    storage.set("libHistorySort", historySort);
     storage.set(STORAGE_KEYS.HISTORY_ENABLED, historyEnabled ? 1 : 0);
     window.dispatchEvent(
       new CustomEvent("streambert:library-sort-changed", { detail: sort }),
@@ -1757,6 +1766,72 @@ function LibraryPrivacySection() {
           value={sort}
           onChange={(v) => setSort(v)}
           options={SORT_OPTIONS}
+        />
+      </div>
+
+      {/* Saved Tab Sort */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--text2)",
+            marginBottom: 8,
+          }}
+        >
+          Saved tab sort order
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--text3)",
+            marginBottom: 12,
+            lineHeight: 1.6,
+          }}
+        >
+          How titles in the Library's "Saved" tab are sorted.
+        </div>
+        <SettingsSelect
+          value={savedSort}
+          onChange={(v) => setSavedSort(v)}
+          options={[
+            { value: "added", label: "Added" },
+            { value: "title", label: "Title A–Z" },
+            { value: "newest", label: "Newest" },
+            { value: "oldest", label: "Oldest" },
+          ]}
+        />
+      </div>
+
+      {/* History Tab Sort */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--text2)",
+            marginBottom: 8,
+          }}
+        >
+          History tab sort order
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--text3)",
+            marginBottom: 12,
+            lineHeight: 1.6,
+          }}
+        >
+          How items in the Library's "History" tab are sorted.
+        </div>
+        <SettingsSelect
+          value={historySort}
+          onChange={(v) => setHistorySort(v)}
+          options={[
+            { value: "recent", label: "Recent" },
+            { value: "title", label: "Title A–Z" },
+          ]}
         />
       </div>
 
@@ -2496,6 +2571,630 @@ function DiscordRpcSection() {
   );
 }
 
+// ── Stream Defaults Section ───────────────────────────────────────────────────
+function StreamDefaultsSection() {
+  const [source, setSource] = useState(
+    () => storage.get(STORAGE_KEYS.PLAYER_SOURCE) || NON_ANIME_DEFAULT_SOURCE,
+  );
+  const [nativePref, setNativePref] = useState(
+    () => storage.get("nativePlayer") === true,
+  );
+  const [dubMode, setDubMode] = useState(
+    () => storage.get(STORAGE_KEYS.HIANIME_DUB_MODE) || "",
+  );
+  const [saved, setSaved] = useState(false);
+
+  const flash = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const rowLabel = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text2)",
+    marginBottom: 8,
+  };
+  const rowDesc = {
+    fontSize: 12,
+    color: "var(--text3)",
+    marginBottom: 10,
+    lineHeight: 1.6,
+  };
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div className="settings-section-title">Stream Defaults</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 20,
+          lineHeight: 1.6,
+        }}
+      >
+        Which streaming provider and playback mode to use when you press play.
+        These are starting points — you can still switch per title from inside
+        the player.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Default source */}
+        <div>
+          <div style={rowLabel}>Default Source</div>
+          <div style={rowDesc}>
+            Streaming provider used for new titles. Anime titles fall back to
+            the HiAnime source automatically when the pick can't serve them.
+          </div>
+          <SettingsSelect
+            value={source}
+            onChange={(v) => {
+              setSource(v);
+              storage.set(STORAGE_KEYS.PLAYER_SOURCE, v);
+              flash();
+            }}
+            options={PLAYER_SOURCES.map((s) => ({
+              value: s.id,
+              label: s.label + (s.movieOnly ? " (movies only)" : ""),
+            }))}
+          />
+        </div>
+
+        {/* Anime dub mode */}
+        <div>
+          <div style={rowLabel}>Anime Audio Default</div>
+          <div style={rowDesc}>
+            Prefer subtitled (Sub) or dubbed (Dub) audio for anime sources.
+            "Auto" uses whichever you picked last inside the player.
+          </div>
+          <SettingsSelect
+            value={dubMode}
+            onChange={(v) => {
+              setDubMode(v);
+              if (v === "") storage.remove(STORAGE_KEYS.HIANIME_DUB_MODE);
+              else storage.set(STORAGE_KEYS.HIANIME_DUB_MODE, v);
+              flash();
+            }}
+            options={[
+              { value: "", label: "Auto (remember last)" },
+              { value: "sub", label: "Sub" },
+              { value: "dub", label: "Dub" },
+            ]}
+          />
+        </div>
+
+        {/* Native player preference */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Toggle
+            value={nativePref}
+            onChange={(v) => {
+              setNativePref(v);
+              storage.set("nativePlayer", v);
+              flash();
+            }}
+            title="Prefer the built-in native player"
+          />
+          <div>
+            <div
+              style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}
+            >
+              Prefer native player
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+              Start playback in Streambert's built-in player instead of the
+              embedded site webview whenever a direct stream URL can be
+              captured. Can still be toggled per title inside the player.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {saved && (
+        <div style={{ marginTop: 12, fontSize: 13, color: "#48c774" }}>
+          ✓ Saved
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Player Defaults Section ───────────────────────────────────────────────────
+function PlayerDefaultsSection() {
+  const [rate, setRate] = useState(() => storage.get("playerDefRate") ?? "");
+  const [vol, setVol] = useState(() => storage.get("playerDefVol") ?? "");
+  const [muted, setMuted] = useState(() => storage.get("playerDefMuted") ?? "");
+  const [cueSize, setCueSize] = useState(
+    () => storage.get("playerDefCueSize") ?? "",
+  );
+  const [subOff, setSubOff] = useState(
+    () => storage.get("playerDefSubOff") ?? "",
+  );
+  const [saved, setSaved] = useState(false);
+
+  const flash = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // "" removes the key entirely → "Auto" (remember last in-player value)
+  const setOrClear = (key, setter) => (v) => {
+    setter(v);
+    if (v === "") storage.remove(key);
+    else storage.set(key, Number(v));
+    flash();
+  };
+
+  const commitSubOff = () => {
+    const n = parseFloat(subOff);
+    if (subOff === "" || Number.isNaN(n)) {
+      setSubOff("");
+      storage.remove("playerDefSubOff");
+    } else {
+      const c = Math.max(-10, Math.min(10, n));
+      setSubOff(c);
+      storage.set("playerDefSubOff", c);
+    }
+    flash();
+  };
+
+  const rowLabel = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text2)",
+    marginBottom: 8,
+  };
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div className="settings-section-title">Player defaults</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 20,
+          lineHeight: 1.6,
+        }}
+      >
+        Applied to every new stream — in-player changes only stick when no
+        default is set here. Pick "Auto" to clear an override and fall back to
+        whatever was last used inside the player.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Playback speed */}
+        <div>
+          <div style={rowLabel}>Default playback speed</div>
+          <SettingsSelect
+            value={rate}
+            onChange={setOrClear("playerDefRate", setRate)}
+            options={[
+              { value: "", label: "Auto (remember last)" },
+              { value: 0.5, label: "0.5×" },
+              { value: 0.75, label: "0.75×" },
+              { value: 1, label: "1× (normal)" },
+              { value: 1.25, label: "1.25×" },
+              { value: 1.5, label: "1.5×" },
+              { value: 2, label: "2×" },
+              { value: 2.5, label: "2.5×" },
+              { value: 3, label: "3×" },
+            ]}
+          />
+        </div>
+
+        {/* Volume */}
+        <div>
+          <div style={rowLabel}>Default volume</div>
+          <SettingsSelect
+            value={vol}
+            onChange={setOrClear("playerDefVol", setVol)}
+            options={[
+              { value: "", label: "Auto (remember last)" },
+              ...[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((p) => ({
+                value: p / 100,
+                label: `${p}%`,
+              })),
+            ]}
+          />
+        </div>
+
+        {/* Start muted */}
+        <div>
+          <div style={rowLabel}>Start muted</div>
+          <SettingsSelect
+            value={muted}
+            onChange={(v) => {
+              setMuted(v);
+              if (v === "") storage.remove("playerDefMuted");
+              else storage.set("playerDefMuted", v === "true");
+              flash();
+            }}
+            options={[
+              { value: "", label: "Auto (remember last)" },
+              { value: "true", label: "Muted" },
+              { value: "false", label: "Unmuted" },
+            ]}
+          />
+        </div>
+
+        {/* Caption size */}
+        <div>
+          <div style={rowLabel}>Caption size</div>
+          <SettingsSelect
+            value={cueSize}
+            onChange={setOrClear("playerDefCueSize", setCueSize)}
+            options={[
+              { value: "", label: "Auto (remember last)" },
+              { value: 0.85, label: "Small" },
+              { value: 1.15, label: "Medium" },
+              { value: 1.6, label: "Large" },
+            ]}
+          />
+        </div>
+
+        {/* Subtitle sync offset */}
+        <div>
+          <div style={rowLabel}>Subtitle sync offset</div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--text3)",
+              marginBottom: 10,
+              lineHeight: 1.6,
+            }}
+          >
+            Shift all subtitles forward (+) or backward (−), in seconds.
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <input
+              type="number"
+              min={-10}
+              max={10}
+              step={0.5}
+              className="apikey-input"
+              style={{ width: 90, marginBottom: 0 }}
+              placeholder="Auto"
+              value={subOff}
+              onChange={(e) => setSubOff(e.target.value)}
+              onBlur={commitSubOff}
+            />
+            <span style={{ fontSize: 14, color: "var(--text2)" }}>
+              seconds
+            </span>
+            {subOff !== "" && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 12 }}
+                onClick={() => {
+                  setSubOff("");
+                  storage.remove("playerDefSubOff");
+                  flash();
+                }}
+              >
+                Reset to Auto
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {saved && (
+        <div style={{ marginTop: 12, fontSize: 13, color: "#48c774" }}>
+          ✓ Saved
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Adult Section (18+) Defaults ─────────────────────────────────────────────
+// Option ids mirror the ORDERS / DURS / RATINGS / grid-size lists in
+// AdultPage.jsx so defaults picked here line up exactly with its filters.
+const ADULT_MODE_OPTIONS = [
+  { value: "browse", label: "Browse (video catalog)" },
+  { value: "sites", label: "Sites" },
+  { value: "images", label: "Images" },
+  { value: "creators", label: "Creators" },
+];
+const ADULT_ORDER_OPTIONS = [
+  { value: "top-weekly", label: "Top weekly" },
+  { value: "top-monthly", label: "Top monthly" },
+  { value: "top-rated", label: "Top rated" },
+  { value: "most-voted", label: "Most voted" },
+  { value: "popular", label: "Most viewed" },
+  { value: "latest", label: "Newest" },
+  { value: "longest", label: "Longest" },
+];
+const ADULT_DUR_OPTIONS = [
+  { value: "", label: "Any length" },
+  { value: "short", label: "< 5 min" },
+  { value: "mid", label: "5–15 min" },
+  { value: "long", label: "15–30 min" },
+  { value: "xlong", label: "30+ min" },
+];
+const ADULT_RATE_OPTIONS = [
+  { value: "", label: "Any rating" },
+  { value: "3.5", label: "70%+ rated" },
+  { value: "4", label: "80%+ rated" },
+  { value: "4.25", label: "85%+ rated" },
+  { value: "4.5", label: "90%+ rated" },
+  { value: "4.75", label: "95%+ rated" },
+];
+const ADULT_GRID_OPTIONS = [
+  { value: "s", label: "S — small cards" },
+  { value: "m", label: "M — medium cards" },
+  { value: "l", label: "L — large cards" },
+];
+
+function AdultDefaultsSection() {
+  const [mode, setMode] = useState(() => storage.get("adultMode") || "browse");
+  const [searchAll, setSearchAll] = useState(
+    () => storage.get("adultSearchAll") === true,
+  );
+  const [order, setOrder] = useState(
+    () => storage.get("adultOrder") || "top-weekly",
+  );
+  const [dur, setDur] = useState(() => storage.get("adultDur") || "");
+  const [minRate, setMinRate] = useState(() => storage.get("adultRate") || "");
+  const [gridSize, setGridSize] = useState(
+    () => storage.get("adultGridSize") || "m",
+  );
+  const [gay, setGay] = useState(() => storage.get("adultGay") === true);
+  const [hideSeen, setHideSeen] = useState(
+    () => storage.get("adultHideSeen") === true,
+  );
+  const [gateReset, setGateReset] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const flash = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const rowLabel = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text2)",
+    marginBottom: 8,
+  };
+  const rowDesc = {
+    fontSize: 12,
+    color: "var(--text3)",
+    marginBottom: 10,
+    lineHeight: 1.6,
+  };
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div className="settings-section-title">18+ Section Defaults</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 20,
+          lineHeight: 1.6,
+        }}
+      >
+        Defaults for the 18+ section — applied every time it opens. The age
+        confirmation gate (and PIN, if one is set under Privacy &amp; Network)
+        still applies.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Default tab */}
+        <div>
+          <div style={rowLabel}>Default tab</div>
+          <div style={rowDesc}>
+            Which view the 18+ section opens on.
+          </div>
+          <SettingsSelect
+            value={mode}
+            onChange={(v) => {
+              setMode(v);
+              storage.set("adultMode", v);
+              flash();
+            }}
+            options={ADULT_MODE_OPTIONS}
+          />
+        </div>
+
+        {/* Multi-site search on open */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Toggle
+            value={searchAll}
+            onChange={(v) => {
+              setSearchAll(v);
+              storage.set("adultSearchAll", v);
+              flash();
+            }}
+            title="Search every site at once when the 18+ section opens"
+          />
+          <div>
+            <div
+              style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}
+            >
+              Multi-site search on open
+            </div>
+            <div
+              style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}
+            >
+              Opens the merged "🌐 All" view — searching every site at once —
+              instead of the single-site browse catalog. Only applies to the
+              Browse tab.
+            </div>
+          </div>
+        </div>
+
+        {/* Default sort */}
+        <div>
+          <div style={rowLabel}>Default sort</div>
+          <div style={rowDesc}>
+            Sort order applied to browse and multi-site results.
+          </div>
+          <SettingsSelect
+            value={order}
+            onChange={(v) => {
+              setOrder(v);
+              storage.set("adultOrder", v);
+              flash();
+            }}
+            options={ADULT_ORDER_OPTIONS}
+          />
+        </div>
+
+        {/* Length filter */}
+        <div>
+          <div style={rowLabel}>Default length filter</div>
+          <div style={rowDesc}>
+            Filter out videos shorter or longer than this on open.
+          </div>
+          <SettingsSelect
+            value={dur}
+            onChange={(v) => {
+              setDur(v);
+              storage.set("adultDur", v);
+              flash();
+            }}
+            options={ADULT_DUR_OPTIONS}
+          />
+        </div>
+
+        {/* Minimum rating */}
+        <div>
+          <div style={rowLabel}>Minimum rating</div>
+          <div style={rowDesc}>
+            Hide videos rated below this threshold on open.
+          </div>
+          <SettingsSelect
+            value={minRate}
+            onChange={(v) => {
+              setMinRate(v);
+              storage.set("adultRate", v);
+              flash();
+            }}
+            options={ADULT_RATE_OPTIONS}
+          />
+        </div>
+
+        {/* Grid density */}
+        <div>
+          <div style={rowLabel}>Grid density</div>
+          <div style={rowDesc}>
+            Card size used by the browse grid.
+          </div>
+          <SettingsSelect
+            value={gridSize}
+            onChange={(v) => {
+              setGridSize(v);
+              storage.set("adultGridSize", v);
+              flash();
+            }}
+            options={ADULT_GRID_OPTIONS}
+          />
+        </div>
+
+        {/* Gay content */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Toggle
+            value={gay}
+            onChange={(v) => {
+              setGay(v);
+              storage.set("adultGay", v);
+              flash();
+            }}
+            title="Include gay content"
+          />
+          <div>
+            <div
+              style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}
+            >
+              Gay content
+            </div>
+            <div
+              style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}
+            >
+              Include gay content in browse and multi-site results.
+            </div>
+          </div>
+        </div>
+
+        {/* Hide seen */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Toggle
+            value={hideSeen}
+            onChange={(v) => {
+              setHideSeen(v);
+              storage.set("adultHideSeen", v);
+              flash();
+            }}
+            title="Hide already-watched videos"
+          />
+          <div>
+            <div
+              style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}
+            >
+              Hide already watched
+            </div>
+            <div
+              style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}
+            >
+              Filter out videos that appear in your recents list.
+            </div>
+          </div>
+        </div>
+
+        {/* Reset confirmation gate */}
+        <div>
+          <div style={rowLabel}>18+ confirmation gate</div>
+          <div style={rowDesc}>
+            The "are you 18?" confirmation (and PIN prompt, if a PIN is set)
+            was previously dismissed for this install. Resetting brings it
+            back — it will be shown again the next time you open the 18+
+            section.
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                storage.remove("adultConfirmed");
+                sessionStorage.removeItem("adultUnlocked");
+                setGateReset(true);
+                setTimeout(() => setGateReset(false), 3000);
+              }}
+            >
+              Reset 18+ confirmation
+            </button>
+            {gateReset && (
+              <span style={{ fontSize: 13, color: "#48c774" }}>
+                ✓ Reset — the gate will reappear on your next visit
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {saved && (
+        <div style={{ marginTop: 12, fontSize: 13, color: "#48c774" }}>
+          ✓ Saved
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Section Group Header ─────────────────────────────────────────────────────
 function SectionGroupHeader({ title, subtitle }) {
   return (
@@ -3000,6 +3699,26 @@ const SECTION_NAV = [
     ],
   },
   {
+    id: "adult",
+    label: "Adult (18+)",
+    icon: "🌶",
+    keywords: [
+      "adult",
+      "18+",
+      "nsfw",
+      "porn",
+      "xxx",
+      "gate",
+      "confirmation",
+      "gay",
+      "grid",
+      "sort",
+      "eporner",
+      "sites",
+      "creators",
+    ],
+  },
+  {
     id: "playback",
     label: "Playback",
     icon: "▶",
@@ -3018,6 +3737,13 @@ const SECTION_NAV = [
       "aniskip",
       "anime",
       "outro",
+      "source",
+      "native",
+      "dub",
+      "volume",
+      "speed",
+      "muted",
+      "sync",
     ],
   },
   {
@@ -3805,6 +4531,7 @@ export default function SettingsPage({
   // ── Section refs for navigation ────────────────────────────────────────────
   const secUpdates = useRef(null);
   const secContent = useRef(null);
+  const secAdult = useRef(null);
   const secPlayback = useRef(null);
   const secSubtitles = useRef(null);
   const secDownloads = useRef(null);
@@ -3819,6 +4546,7 @@ export default function SettingsPage({
   const sectionRefs = {
     updates: secUpdates,
     content: secContent,
+    adult: secAdult,
     playback: secPlayback,
     subtitles: secSubtitles,
     downloads: secDownloads,
@@ -4260,6 +4988,17 @@ export default function SettingsPage({
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP: ADULT (18+)                                                 */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        <div ref={secAdult} style={{ scrollMarginTop: 80 }}>
+          <SectionGroupHeader
+            title="Adult Section (18+)"
+            subtitle="Defaults for the 18+ section"
+          />
+          <AdultDefaultsSection />
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
         {/* GROUP: PLAYBACK                                                    */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         <div ref={secPlayback} style={{ scrollMarginTop: 80 }}>
@@ -4267,6 +5006,14 @@ export default function SettingsPage({
             title="Playback"
             subtitle="Trailer source and auto-watched behavior"
           />
+
+          <StreamDefaultsSection />
+
+          <Divider />
+
+          <PlayerDefaultsSection />
+
+          <Divider />
 
           {/* Invidious */}
           <div style={{ marginBottom: 40 }}>
@@ -4978,6 +5725,36 @@ export default function SettingsPage({
                   })
                 }
                 danger
+              />
+            </div>
+
+            <div style={{ height: 1, background: "var(--border)" }} />
+
+            {/* Search History */}
+            <div style={{ padding: "22px 24px" }}>
+              <CleanRow
+                title="Clear Search History"
+                description="Removes the list of recent searches shown when you open the search box."
+                buttonLabel="Clear History"
+                onAction={async () => {
+                  storage.remove("searchHistory");
+                  return { msg: "✓ Search history cleared" };
+                }}
+              />
+            </div>
+
+            <div style={{ height: 1, background: "var(--border)" }} />
+
+            {/* Episode-release cache */}
+            <div style={{ padding: "22px 24px" }}>
+              <CleanRow
+                title="Clear New-Episode Cache"
+                description="Clears the cached episode-release schedule used for new-episode notifications. It rebuilds itself on the next library check."
+                buttonLabel="Clear Cache"
+                onAction={async () => {
+                  storage.remove("episodeReleaseCache");
+                  return { msg: "✓ Episode cache cleared" };
+                }}
               />
             </div>
 

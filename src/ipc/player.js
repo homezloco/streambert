@@ -141,7 +141,7 @@ function register(getMainWindow, { writeSecretMigration, openLocalPlayer }) {
 
   ipcMain.handle(
     "open-path-at-time",
-    async (_, { filePath, seconds, subtitlePaths }) => {
+    async (_, { filePath, seconds, subtitlePaths, prefs }) => {
       // ── Validate filePath ─────────────────────────────────────────────────
       const safeFilePath = validateMediaPath(
         filePath,
@@ -230,6 +230,7 @@ function register(getMainWindow, { writeSecretMigration, openLocalPlayer }) {
           file: safeFilePath,
           startTime: sec,
           subtitle: subFilePaths[0] || null,
+          prefs,
         });
         if (r?.ok && r.playerUrl) {
           if (typeof openLocalPlayer === "function") {
@@ -251,7 +252,7 @@ function register(getMainWindow, { writeSecretMigration, openLocalPlayer }) {
   // CDN requests look identical to the embed's own.
   ipcMain.handle(
     "native-play",
-    async (_, { url, subtitle, subtitles, startTime } = {}) => {
+    async (_, { url, subtitle, subtitles, startTime, prefs } = {}) => {
       if (!isHttpUrl(url)) return { ok: false, error: "Invalid stream URL" };
       const meta = streamMeta.get(url) || {};
       try {
@@ -263,6 +264,7 @@ function register(getMainWindow, { writeSecretMigration, openLocalPlayer }) {
           subtitle: subtitle || null,
           subtitles: Array.isArray(subtitles) ? subtitles : [],
           startTime: Number.isFinite(+startTime) ? +startTime : 0,
+          prefs,
         });
         return { ok: true, playerUrl: r.playerUrl };
       } catch (e) {
