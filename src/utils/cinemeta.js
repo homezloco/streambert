@@ -513,7 +513,22 @@ export async function cinemetaFetch(path) {
       return { results: [] }; // no certifications in Cinemeta
     }
     if (sub === "recommendations" || sub === "similar") {
-      return { results: [] }; // no equivalent
+      // No recs endpoint in Cinemeta — synthesize from the title's top genre
+      // so "More like this" / For-You rows still populate keyless.
+      try {
+        const meta = await fetchCinemetaMeta(kind, id);
+        const g = (meta.genre || [])[0];
+        if (!g) return { results: [] };
+        const out = await catalog(kind, "top", { genre: g });
+        out.results = out.results.filter(
+          (i) =>
+            String(i.id) !== String(id) &&
+            String(i.id) !== String(meta.imdb_id || ""),
+        );
+        return out;
+      } catch {
+        return { results: [] };
+      }
     }
     throw unsupported(pathname);
   }

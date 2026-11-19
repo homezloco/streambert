@@ -623,6 +623,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
 <div id="seekbar"><div class="rail"><div id="seekbuf"></div><div id="seekfill"></div></div><div id="thumb"><canvas id="tc" width="160" height="90"></canvas><div id="ttime"></div></div></div>
 <button id="gear" title="Quality & speed">&#9881;</button>
 <button id="pip" title="Picture in picture">&#9719;</button>
+<div id="toast" style="display:none;position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:40;background:rgba(15,15,15,.9);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 14px;font:13px system-ui,sans-serif;color:#eee"></div>
 <div id="help" hidden><b>Shortcuts</b>
 <span>&larr;/&rarr;</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
 <span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
@@ -897,6 +898,50 @@ video::cue{font-size:var(--cuesz,1.15em)}
     };
     sleepBox.appendChild(b);
   });
+  // ── A-B repeat: set point A, then B, loops the segment; third click clears
+  let abA=null,abB=null;
+  const abBtn=document.createElement('button');
+  const paintAB=()=>{
+    abBtn.textContent=abA==null?'A-B repeat':(abB==null?('A '+fmtT(abA)+' → set B'):('A-B '+fmtT(abA)+'–'+fmtT(abB)));
+    abBtn.classList.toggle('on',abA!=null);
+  };
+  abBtn.onclick=()=>{
+    if(abA==null)abA=video.currentTime;
+    else if(abB==null){if(video.currentTime>abA+0.2)abB=video.currentTime;else abA=null;}
+    else{abA=abB=null;}
+    paintAB();
+  };
+  paintAB();playOpts.appendChild(abBtn);
+  video.addEventListener('timeupdate',()=>{
+    if(abA!=null&&abB!=null&&video.currentTime>=abB)video.currentTime=abA;
+  });
+  // ── Fit toggle: contain → cover → fill (for letterboxed/cropped encodes)
+  const FITS=['contain','cover','fill'];let fitI=0;
+  const fitBtn=document.createElement('button');
+  fitBtn.onclick=()=>{
+    fitI=(fitI+1)%FITS.length;video.style.objectFit=FITS[fitI];
+    fitBtn.textContent='Fit: '+FITS[fitI];fitBtn.classList.toggle('on',fitI!==0);
+    menu.hidden=true;
+  };
+  fitBtn.textContent='Fit: contain';playOpts.appendChild(fitBtn);
+  // ── Snapshot: grab the current frame as PNG (saved to Downloads/Streambert)
+  const toast=document.getElementById('toast');
+  let toastT=null;
+  const showToast=(m)=>{toast.textContent=m;toast.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>toast.style.display='none',2500);};
+  const snapBtn=document.createElement('button');
+  snapBtn.textContent='Snapshot';
+  snapBtn.onclick=()=>{
+    try{
+      const c=document.createElement('canvas');
+      c.width=video.videoWidth;c.height=video.videoHeight;
+      c.getContext('2d').drawImage(video,0,0);
+      fetch('/snapshot?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({png:c.toDataURL('image/png')})})
+        .then(r=>showToast(r.ok?'Frame saved to Downloads/Streambert':'Save failed'))
+        .catch(()=>showToast('Save failed'));
+    }catch(e){showToast('Save failed');}
+    menu.hidden=true;
+  };
+  playOpts.appendChild(snapBtn);
   function buildLevels(hls){
     // Auto first, then real levels sorted best→worst
     const items=[{label:'Auto',idx:-1}].concat(
@@ -1293,6 +1338,32 @@ function getPlayerServer() {
             });
           } catch {}
           res.writeHead(204);
+          res.end();
+        });
+        return;
+      }
+
+      // Frame snapshot from the player page — writes a PNG into the OS
+      // Downloads folder under Streambert/ (bounded to 12 MB)
+      if (url.pathname === "/snapshot" && req.method === "POST") {
+        let body = "";
+        req.on("data", (c) => {
+          body += c;
+          if (body.length > 16 * 1024 * 1024) req.destroy();
+        });
+        req.on("end", () => {
+          try {
+            const { png } = JSON.parse(body);
+            const m = /^data:image\/png;base64,(.+)$/.exec(png || "");
+            if (!m) throw new Error("bad png");
+            const dir = path.join(app.getPath("downloads"), "Streambert");
+            fs.mkdirSync(dir, { recursive: true });
+            const name = `snapshot_${Date.now()}.png`;
+            fs.writeFileSync(path.join(dir, name), Buffer.from(m[1], "base64"));
+            res.writeHead(204);
+          } catch {
+            res.writeHead(400);
+          }
           res.end();
         });
         return;
