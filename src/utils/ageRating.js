@@ -1,5 +1,50 @@
 // ── Age Rating Backend ────────────────────────────────────────────────────────
-import { tmdbFetch } from "./api";
+import { tmdbFetch, isKeylessMode } from "./api";
+
+// ── Wikidata fallback (keyless mode) ──────────────────────────────────────────
+// Wikidata stores MPAA film ratings (property P1657) keyed by IMDb id (P345),
+// and keyless-mode item ids *are* IMDb ids — so one SPARQL VALUES query can
+// resolve certifications for a whole browse page at once. US certs only, which
+// matches the US fallback the TMDB path already uses.
+const WDQS = "https://query.wikidata.org/sparql";
+const WD_CERT_RE =
+  /^(G|PG|PG-13|R|NC-17|X|NR|NOT RATED|UNRATED|TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA)$/i;
+
+export async function fetchWikidataCertMap(imdbIds) {
+  const map = new Map();
+  const ids = [...new Set((imdbIds || []).filter((id) => /^tt\d+$/.test(id)))];
+  for (let i = 0; i < ids.length; i += 150) {
+    const values = ids
+      .slice(i, i + 150)
+      .map((id) => `"${id}"`)
+      .join(" ");
+    const query =
+      `SELECT ?imdb ?certLabel WHERE { VALUES ?imdb { ${values} } ` +
+      `?item wdt:P345 ?imdb. ?item wdt:P1657 ?cert. ` +
+      `SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`;
+    try {
+      const res = await fetch(
+        `${WDQS}?format=json&query=${encodeURIComponent(query)}`,
+        { headers: { Accept: "application/sparql-results+json" } },
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const b of data?.results?.bindings || []) {
+        const id = b.imdb?.value;
+        const label = (b.certLabel?.value || "").trim();
+        if (id && WD_CERT_RE.test(label) && !map.has(id))
+          map.set(id, label.toUpperCase() === "X" ? "NC-17" : label);
+      }
+    } catch {}
+  }
+  return map;
+}
+
+async function wikidataRating(imdbId) {
+  const found = await fetchWikidataCertMap([imdbId]);
+  const cert = found.get(imdbId) || null;
+  return { cert, minAge: cert ? certToMinAge(cert, "US") : null };
+}
 
 export const RATING_COUNTRIES = [
   { code: "US", label: "United States (MPAA / TV Parental)" },
@@ -119,6 +164,7 @@ export function isRestricted(contentMinAge, ageLimitSetting) {
 }
 
 export async function fetchMovieRating(movieId, apiKey, countryCode) {
+  if (isKeylessMode(apiKey)) return wikidataRating(movieId);
   try {
     const data = await tmdbFetch(`/movie/${movieId}/release_dates`, apiKey);
     const results = data.results || [];
@@ -146,6 +192,7 @@ export async function fetchMovieRating(movieId, apiKey, countryCode) {
 }
 
 export async function fetchTVRating(tvId, apiKey, countryCode) {
+  if (isKeylessMode(apiKey)) return wikidataRating(tvId);
   try {
     const data = await tmdbFetch(`/tv/${tvId}/content_ratings`, apiKey);
     const results = data.results || [];

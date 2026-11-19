@@ -2,9 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import {
   fetchMovieRating,
   fetchTVRating,
+  fetchWikidataCertMap,
+  certToMinAge,
   getAgeLimitSetting,
   getRatingCountry,
 } from "./ageRating";
+import { isKeylessMode } from "./api";
 import { storage, getApiKey } from "./storage";
 
 const CACHE_KEY = "ratingsCache";
@@ -89,6 +92,36 @@ export function useRatings(items) {
     if (!missing.length) return;
 
     let cancelled = false;
+
+    // Keyless mode: Cinemeta has no certifications, but item ids are IMDb
+    // ids — resolve them all in one Wikidata SPARQL query (MPAA certs).
+    if (isKeylessMode(apiKey)) {
+      (async () => {
+        const found = await fetchWikidataCertMap(missing.map((i) => i.id));
+        if (cancelled) return;
+        const patch = {};
+        for (const item of missing) {
+          const type = item.media_type === "tv" ? "tv" : "movie";
+          const cert = found.get(item.id) || null;
+          const res = {
+            cert,
+            minAge: cert ? certToMinAge(cert, "US") : null,
+          };
+          cache[`${type}_${item.id}_${ratingCountry}`] = {
+            cert: res.cert,
+            minAge: res.minAge,
+            ts: Date.now(),
+          };
+          patch[`${type}_${item.id}`] = res;
+        }
+        setRatingsMap((prev) => ({ ...prev, ...patch }));
+        writeCache(cache);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     (async () => {
       for (let i = 0; i < missing.length; i++) {
         if (cancelled) break;
