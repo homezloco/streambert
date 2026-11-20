@@ -2220,6 +2220,27 @@ select:focus-visible {
     }
 }
 
+/* ── Play-on-TV QR overlay (player pages + adult playing view) ──────────── */
+.tv-share-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.tv-share-frame {
+    width: 380px;
+    height: 500px;
+    max-width: 92vw;
+    max-height: 88vh;
+    border: 0;
+    border-radius: 10px;
+    background: #fff;
+}
+
 .fade-in {
     animation: fadeIn 0.3s ease;
 }

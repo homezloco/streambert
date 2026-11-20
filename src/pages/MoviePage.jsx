@@ -170,6 +170,8 @@ export default function MoviePage({
   const [webviewLoading, setWebviewLoading] = useState(false);
   // Small non-blocking notice (e.g. silent source failover)
   const [toast, showToast] = useToast();
+  // Play-on-TV QR overlay (only when a native/local player URL exists)
+  const [showTv, setShowTv] = useState(false);
 
   // ID the selected source expects (TMDB id, or converted IMDb id)
   const srcId = useSourceId(playerSource, "movie", item.id, apiKey);
@@ -1450,6 +1452,16 @@ export default function MoviePage({
                   Native
                 </button>
               )}
+              {/* Play on TV: LAN QR share — needs the local player URL */}
+              {nativePlayerUrl && (
+                <button
+                  className="player-overlay-btn"
+                  title="Play on TV — QR code for a device on this network"
+                  onClick={() => setShowTv(true)}
+                >
+                  📺
+                </button>
+              )}
               {/* Sub/Dub toggle: HiAnime, and anime-capable sources (Vidnest) on anime titles */}
               {(sourceIsAsync(playerSource) ||
                 (isAnime && sourceSupportsAnime(playerSource))) && (
@@ -1736,6 +1748,16 @@ export default function MoviePage({
           posterPath={d.poster_path}
           tmdbId={details?.moviedb_id || item.id}
         />
+      )}
+
+      {showTv && nativePlayerUrl && (
+        <div className="tv-share-overlay" onClick={() => setShowTv(false)}>
+          <iframe
+            className="tv-share-frame"
+            title="Play on TV"
+            src={nativePlayerUrl.replace("/player?", "/tv?")}
+          />
+        </div>
       )}
 
       <Toast toast={toast} />

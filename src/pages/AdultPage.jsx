@@ -744,6 +744,9 @@ export default function AdultPage() {
   // Native-swap playback is tracked so a revisit resumes where you left off:
   // key is the video's browse id or the site page URL that spawned the swap
   const nativeCtxRef = useRef(null); // {key} for the active native playback
+  // Last local-player URL the native swap produced — enables the 📺 share
+  const [nativeUrl, setNativeUrl] = useState(null);
+  const [showTv, setShowTv] = useState(false);
   const playNative = async (url) => {
     if (!url) return;
     let key = null;
@@ -766,6 +769,7 @@ export default function AdultPage() {
       prefs: playerDefaults(),
     });
     if (res?.ok && res.playerUrl) {
+      setNativeUrl(res.playerUrl);
       try {
         webviewRef.current.src = res.playerUrl;
       } catch {}
@@ -965,6 +969,8 @@ export default function AdultPage() {
 
   const stopPlaying = useCallback(() => {
     setPlaying(null);
+    setNativeUrl(null);
+    setShowTv(false);
     window.electron?.playerStopped?.();
   }, []);
 
@@ -1049,6 +1055,15 @@ export default function AdultPage() {
           >
             🎲 Again
           </button>
+          {nativeUrl && (
+            <button
+              className="btn btn-ghost dl-btn--sm"
+              title="Play on TV — QR code for a device on this network"
+              onClick={() => setShowTv(true)}
+            >
+              📺 TV
+            </button>
+          )}
           <button
             className="btn btn-ghost dl-btn--sm"
             disabled={!dlUrl}
@@ -1088,6 +1103,18 @@ export default function AdultPage() {
           sandbox="allow-scripts allow-same-origin allow-forms"
           className="adult-webview"
         />
+        {showTv && nativeUrl && (
+          <div
+            className="tv-share-overlay"
+            onClick={() => setShowTv(false)}
+          >
+            <iframe
+              className="tv-share-frame"
+              title="Play on TV"
+              src={nativeUrl.replace("/player?", "/tv?")}
+            />
+          </div>
+        )}
       </div>
     );
   }
