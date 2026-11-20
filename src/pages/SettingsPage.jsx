@@ -2966,6 +2966,7 @@ function PlayerDefaultsSection() {
 const ADULT_MODE_OPTIONS = [
   { value: "home", label: "Home (rows)" },
   { value: "browse", label: "Browse (video catalog)" },
+  { value: "channels", label: "Channels" },
   { value: "sites", label: "Sites" },
   { value: "images", label: "Images" },
   { value: "creators", label: "Creators" },

@@ -353,6 +353,27 @@ export default function AdultPage() {
     storage.set("adultCreatorSite", v);
     _setCreatorSite(v);
   };
+  // ── Channels mode: scraped channel catalogs (Pornhub/RedTube) ──
+  const [channels, setChannels] = useState([]);
+  const [chanPage, setChanPage] = useState(1);
+  const [chanLoading, setChanLoading] = useState(false);
+  const [chanHasMore, setChanHasMore] = useState(true);
+  const [chanSite, _setChanSite] = useState(
+    () => storage.get("adultChanSite") || "all",
+  );
+  const [chanSort, _setChanSort] = useState(
+    () => storage.get("adultChanSort") || "rank",
+  );
+  // When a channel card is open: {url, name, slug, siteId, site}
+  const [channelView, setChannelView] = useState(null);
+  const setChanSite = (v) => {
+    storage.set("adultChanSite", v);
+    _setChanSite(v);
+  };
+  const setChanSort = (v) => {
+    storage.set("adultChanSort", v);
+    _setChanSort(v);
+  };
   const [favs, setFavs] = useState(() => storage.get("adultSiteFavs") || []);
   const toggleFav = (id) => {
     const next = favs.includes(id)
@@ -652,6 +673,40 @@ export default function AdultPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recents.length]);
+
+  // ── Channels mode fetch: page 1 on enter/filter change, "load more" after ──
+  const loadChannels = useCallback(
+    async (page, replace) => {
+      if (!window.electron?.getAdultChannels) return;
+      setChanLoading(true);
+      try {
+        const r = await window.electron.getAdultChannels({
+          site: chanSite,
+          sort: chanSort,
+          page,
+        });
+        const list = r?.channels || [];
+        setChannels((prev) => {
+          const base = replace ? [] : prev;
+          const seen = new Set(base.map((c) => `${c.siteId}:${c.slug}`));
+          return [
+            ...base,
+            ...list.filter((c) => !seen.has(`${c.siteId}:${c.slug}`)),
+          ];
+        });
+        setChanPage(page);
+        setChanHasMore(list.length > 0);
+      } finally {
+        setChanLoading(false);
+      }
+    },
+    [chanSite, chanSort],
+  );
+
+  useEffect(() => {
+    if (mode !== "channels" || channelView) return;
+    loadChannels(1, true);
+  }, [mode, chanSite, chanSort, channelView, loadChannels]);
 
   // Resume points saved by the native-swap tracker (adultResume_v_<id>)
   const homeResumeSecs = (id) => storage.get(`adultResume_v_${id}`) || 0;
@@ -1138,11 +1193,13 @@ export default function AdultPage() {
   }
 
   const current =
-    mode === "images"
-      ? IMAGE_SITES.find((s) => s.id === imgSite) || IMAGE_SITES[0]
-      : mode === "creators"
-        ? CREATOR_SITES.find((s) => s.id === creatorSite) || CREATOR_SITES[0]
-        : SITES.find((s) => s.id === site) || SITES[0];
+    mode === "channels"
+      ? channelView || { id: "channels", url: "about:blank" }
+      : mode === "images"
+        ? IMAGE_SITES.find((s) => s.id === imgSite) || IMAGE_SITES[0]
+        : mode === "creators"
+          ? CREATOR_SITES.find((s) => s.id === creatorSite) || CREATOR_SITES[0]
+          : SITES.find((s) => s.id === site) || SITES[0];
 
   return (
     <div className="adult-page">
@@ -1177,6 +1234,13 @@ export default function AdultPage() {
             🌐 All
           </button>
           <button
+            className={`browse-tab${mode === "channels" ? " browse-tab--active" : ""}`}
+            title="Top channels across the major sites"
+            onClick={() => setMode("channels")}
+          >
+            Channels
+          </button>
+          <button
             className={`browse-tab${mode === "sites" ? " browse-tab--active" : ""}`}
             onClick={() => setMode("sites")}
           >
@@ -1195,8 +1259,19 @@ export default function AdultPage() {
             Creators
           </button>
         </div>
-        {mode !== "browse" && mode !== "home" && (
+        {mode !== "browse" &&
+          mode !== "home" &&
+          !(mode === "channels" && !channelView) && (
           <div className="webview-nav">
+            {mode === "channels" && (
+              <button
+                className="browse-tab"
+                title="Back to all channels"
+                onClick={() => setChannelView(null)}
+              >
+                ☰
+              </button>
+            )}
             <button
               className="browse-tab"
               title="Back"
@@ -1567,12 +1642,105 @@ export default function AdultPage() {
             )}
           </div>
         </div>
+      ) : mode === "channels" && !channelView ? (
+        <div className="adult-browse">
+          <div className="browse-genres" style={{ marginBottom: 12 }}>
+            {[
+              { id: "all", label: "🌐 All sites" },
+              { id: "pornhub", label: "Pornhub" },
+              { id: "redtube", label: "RedTube" },
+            ].map((s) => (
+              <button
+                key={s.id}
+                className={`browse-chip${chanSite === s.id ? " browse-chip--active" : ""}`}
+                onClick={() => setChanSite(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+            <select
+              className="browse-sort"
+              value={chanSort}
+              onChange={(e) => setChanSort(e.target.value)}
+              style={{ marginLeft: "auto" }}
+            >
+              <option value="rank">Top channels</option>
+              <option value="trending">Trending</option>
+              <option value="subs">Most subscribed</option>
+              <option value="views">Most viewed</option>
+              <option value="top">Top rated</option>
+              <option value="recent">Recently updated</option>
+              <option value="alpha">A–Z</option>
+            </select>
+          </div>
+          {chanLoading && !channels.length ? (
+            <div className="loader">
+              <div className="spinner" />
+            </div>
+          ) : (
+            <>
+              <div className="chan-grid">
+                {channels.map((c) => (
+                  <button
+                    key={`${c.siteId}:${c.slug}`}
+                    className="chan-card"
+                    title={`${c.site} — ${c.name}`}
+                    onClick={() =>
+                      setChannelView({
+                        ...c,
+                        id: `chan_${c.siteId}_${c.slug}`,
+                      })
+                    }
+                  >
+                    <div className="chan-avatar-wrap">
+                      {c.avatar ? (
+                        <img
+                          className="chan-avatar"
+                          src={c.avatar}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                    <div className="chan-name">{c.name}</div>
+                    <div className="chan-meta">
+                      <span className="chan-site">{c.site}</span>
+                      {c.rank > 0 && <span>#{c.rank}</span>}
+                      {c.subs > 0 && <span>{fmtViews(c.subs)} subs</span>}
+                      {c.videos > 0 && <span>{fmtViews(c.videos)} videos</span>}
+                      {c.views > 0 && <span>{fmtViews(c.views)} views</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {!channels.length && !chanLoading && (
+                <div className="adult-empty">
+                  No channels found — the site may be down or blocked.
+                </div>
+              )}
+              {chanHasMore && channels.length > 0 && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ margin: "16px auto", display: "block" }}
+                  disabled={chanLoading}
+                  onClick={() => loadChannels(chanPage + 1, false)}
+                >
+                  {chanLoading ? "Loading…" : "Load more"}
+                </button>
+              )}
+            </>
+          )}
+        </div>
       ) : mode !== "browse" ? (
         <webview
           ref={webviewRef}
           key={`${mode}-${current.id}`}
           src={current.url}
-          partition={`persist:adult_${current.id}`}
+          partition={`persist:adult_${current.siteId || current.id}`}
           allowpopups="false"
           sandbox="allow-scripts allow-same-origin allow-forms"
           className="adult-webview"
