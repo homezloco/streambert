@@ -13,6 +13,7 @@ import {
   BackIcon,
   HelpIcon,
   AdultIcon,
+  TVIcon,
 } from "./Icons";
 
 export default function Sidebar({
@@ -142,6 +143,12 @@ export default function Sidebar({
         icon={<DownloadsQueueIcon />}
         label="Downloads"
         badge={activeDownloads > 0 ? activeDownloads : null}
+      />
+      <SideBtn
+        active={page === "services"}
+        onClick={() => onNavigate("services")}
+        icon={<TVIcon />}
+        label="Services"
       />
       <SideBtn
         active={page === "adult"}

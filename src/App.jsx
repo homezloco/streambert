@@ -51,6 +51,7 @@ import { useGamepadNav } from "./utils/useGamepadNav";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const BrowsePage = lazy(() => import("./pages/BrowsePage"));
 const AdultPage = lazy(() => import("./pages/AdultPage"));
+const ServicesPage = lazy(() => import("./pages/ServicesPage"));
 const MoviePage = lazy(() => import("./pages/MoviePage"));
 const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
@@ -1251,6 +1252,7 @@ export default function App() {
               />
             )}
             {page === "adult" && <AdultPage />}
+            {page === "services" && <ServicesPage />}
             {page === "movie" && selected && (
               <MoviePage
                 item={selected}

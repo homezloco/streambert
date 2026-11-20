@@ -784,6 +784,13 @@ function createWindow() {
         configureAdultSessionIfNeeded(session.fromPartition(part));
       } catch {}
     }
+    // Service partitions keep their own CSP/trackers (subscription sites
+    // break under the embed hardening) — they only get the global proxy.
+    if (typeof part === "string" && part.startsWith("persist:svc_")) {
+      try {
+        networkIpc.applyGlobalSessionProxy(session.fromPartition(part));
+      } catch {}
+    }
   });
 
   // Block popups from webviews, intercept fullscreen, lazy-init sessions

@@ -86,18 +86,21 @@ async function applyAdultSessionProxy(ses) {
   } catch {}
 }
 
-// Partitions persist under userData/Partitions/<name> — enumerate the adult
-// ones so settings changes reach sessions created earlier.
-function adultPartitions() {
+// Partitions persist under userData/Partitions/<name> — enumerate site/service
+// partitions so settings changes reach sessions created earlier.
+function partitionsWithPrefix(prefix) {
   try {
     const dir = path.join(app.getPath("userData"), "Partitions");
     return fs.existsSync(dir)
-      ? fs.readdirSync(dir).filter((d) => d.startsWith("adult_"))
+      ? fs.readdirSync(dir).filter((d) => d.startsWith(prefix))
       : [];
   } catch {
     return [];
   }
 }
+
+const adultPartitions = () => partitionsWithPrefix("adult_");
+const svcPartitions = () => partitionsWithPrefix("svc_");
 
 // Apply proxy + DoH to every session the app uses (default session covers the
 // main window; player/trailer partitions cover webviews and the pop-out).
@@ -115,11 +118,17 @@ async function applyNetwork() {
       await ses.setProxy(cfg);
     } catch {}
   }
-  // Per-site adult partitions route through their own proxy setting.
+  // Per-site adult partitions route through their own proxy setting;
+  // streaming-service partitions follow the global proxy.
   const adultCfg = adultProxyConfig(s);
   for (const name of adultPartitions()) {
     try {
       await session.fromPartition(`persist:${name}`).setProxy(adultCfg);
+    } catch {}
+  }
+  for (const name of svcPartitions()) {
+    try {
+      await session.fromPartition(`persist:${name}`).setProxy(cfg);
     } catch {}
   }
   try {
@@ -200,10 +209,18 @@ function register() {
   });
 }
 
+// Apply the global app proxy to one session (streaming-service partitions).
+async function applyGlobalSessionProxy(ses) {
+  try {
+    await ses.setProxy(proxyConfig(getSettings()));
+  } catch {}
+}
+
 module.exports = {
   register,
   applyNetwork,
   applyWebRtcFlag,
   applyAdultSessionProxy,
+  applyGlobalSessionProxy,
   getSettings,
 };

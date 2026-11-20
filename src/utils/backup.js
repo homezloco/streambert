@@ -89,6 +89,9 @@ export const BACKUP_KEYS = [
   // PIN hashes (only the SHA-256 digests are stored/exported, never PINs)
   "adultPinHash",
   "appPinHash",
+  // Services page
+  "svcSite",
+  "svcFavs",
   // Library list sorting
   "libSavedSort",
   "libHistorySort",
