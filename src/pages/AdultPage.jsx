@@ -595,6 +595,38 @@ export default function AdultPage() {
     };
   }, [mode, gay]);
 
+  // ── Thumb backfill: recents saved before thumbs were stored look blank on
+  // the Home rows — repair them once per session via the /video/id/ lookup.
+  // (Site-prefixed ids like ph_/rt_ came later and already store thumbs.)
+  const thumbsFixedRef = useRef(false);
+  useEffect(() => {
+    if (thumbsFixedRef.current) return;
+    const missing = recents.filter((r) => !r.thumb && r.id);
+    if (!missing.length) return;
+    thumbsFixedRef.current = true;
+    missing.slice(0, 12).forEach(async (r) => {
+      const eid = String(r.id).replace(/^eporner_/, "");
+      if (/^(ph_|rt_)/.test(eid)) return;
+      try {
+        const d = await (
+          await fetch(
+            `${API.replace("search/", "id/")}?id=${encodeURIComponent(eid)}&thumbsize=big`,
+          )
+        ).json();
+        const src = d?.thumbs?.[0]?.src || d?.default_thumb?.src;
+        if (!src) return;
+        setRecents((prev) => {
+          const next = prev.map((x) =>
+            x.id === r.id ? { ...x, thumb: src } : x,
+          );
+          storage.set("adultRecents", next);
+          return next;
+        });
+      } catch {}
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recents.length]);
+
   // Resume points saved by the native-swap tracker (adultResume_v_<id>)
   const homeResumeSecs = (id) => storage.get(`adultResume_v_${id}`) || 0;
   // Recents → the AdultCard shape (recents now store a thumb; older entries
