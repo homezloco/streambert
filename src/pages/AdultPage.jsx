@@ -264,7 +264,17 @@ function AdultCard({ v, onPlay, seen }) {
       onMouseLeave={stopCycle}
     >
       <div className="adult-card__thumb">
-        {thumbs[0] && <img src={thumbs[idx]} alt="" loading="lazy" />}
+        {thumbs[0] && (
+          <img
+            src={thumbs[idx]}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() =>
+              setIdx((i) => (i + 1 < thumbs.length ? i + 1 : i))
+            }
+          />
+        )}
         {v.length_min && <span className="adult-card__dur">{v.length_min}</span>}
         {seen && <span className="adult-card__seen">✓</span>}
       </div>
