@@ -1479,6 +1479,15 @@ export default function AdultPage() {
           <div className="adult-reco">
             <div className="section-title" style={{ fontSize: 14 }}>
               Trending
+              <button
+                className="see-all"
+                onClick={() => {
+                  setOrder("popular");
+                  setMode("browse");
+                }}
+              >
+                See all
+              </button>
             </div>
             {homeData.trending.length ? (
               <ScrollRow>
@@ -1500,6 +1509,15 @@ export default function AdultPage() {
           <div className="adult-reco">
             <div className="section-title" style={{ fontSize: 14 }}>
               Top Rated
+              <button
+                className="see-all"
+                onClick={() => {
+                  setOrder("top-rated");
+                  setMode("browse");
+                }}
+              >
+                See all
+              </button>
             </div>
             {homeData.top.length ? (
               <ScrollRow>
@@ -1521,6 +1539,15 @@ export default function AdultPage() {
           <div className="adult-reco">
             <div className="section-title" style={{ fontSize: 14 }}>
               Latest
+              <button
+                className="see-all"
+                onClick={() => {
+                  setOrder("latest");
+                  setMode("browse");
+                }}
+              >
+                See all
+              </button>
             </div>
             {homeData.latest.length ? (
               <ScrollRow>

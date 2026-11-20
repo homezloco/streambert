@@ -68,6 +68,18 @@ export default function BrowsePage({
     const t = setTimeout(() => setQuery(searchText.trim()), 400);
     return () => clearTimeout(t);
   }, [searchText]);
+  // Fold committed queries into the shared history (Ctrl+K modal)
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    storage.set(
+      "searchHistory",
+      [q, ...(storage.get("searchHistory") || []).filter((h) => h !== q)].slice(
+        0,
+        12,
+      ),
+    );
+  }, [query]);
   const [pageNum, setPageNum] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);

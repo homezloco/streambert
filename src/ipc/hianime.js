@@ -636,8 +636,8 @@ video::cue{font-size:var(--cuesz,1.15em)}
 <div id="tvpanel" hidden><iframe id="tvf" title="Play on TV"></iframe></div>
 <div id="toast" style="display:none;position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:40;background:rgba(15,15,15,.9);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 14px;font:13px system-ui,sans-serif;color:#eee"></div>
 <div id="help" hidden><b>Shortcuts</b>
-<span>&larr;/&rarr;</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
-<span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
+<span>&larr;/&rarr;</span> or <span>J</span>/<span>L</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
+<span>K</span> play/pause &nbsp;<span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
 <span>P</span> picture-in-picture &nbsp;<span>,</span>/<span>.</span> frame step<br>
 <span>?</span> this help</div>
 <div id="menu" hidden>
@@ -693,6 +693,9 @@ video::cue{font-size:var(--cuesz,1.15em)}
       case 'ArrowDown':video.volume=Math.max(0,video.volume-0.1);e.preventDefault();break;
       case 'f':case 'F':document.fullscreenElement?document.exitFullscreen():video.requestFullscreen();break;
       case 'm':case 'M':video.muted=!video.muted;break;
+      case 'j':case 'J':video.currentTime=Math.max(0,video.currentTime-10);break;
+      case 'l':case 'L':video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);break;
+      case 'k':case 'K':video.paused?video.play():video.pause();break;
       case ',':video.pause();video.currentTime=Math.max(0,video.currentTime-1/30);break;
       case '.':video.pause();video.currentTime=Math.min(video.duration||Infinity,video.currentTime+1/30);break;
       case 'p':case 'P':togglePip();break;
