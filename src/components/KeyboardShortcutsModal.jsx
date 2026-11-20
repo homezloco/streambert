@@ -6,6 +6,10 @@ export default function KeyboardShortcutsModal({ onClose }) {
     { keys: ["Esc"], desc: "Close search / modal" },
     { keys: ["Ctrl", "Z"], desc: "Navigate back" },
     { keys: ["Ctrl", "R"], desc: "Reload app" },
+    {
+      keys: ["Ctrl", "Shift", "X"],
+      desc: "Panic — hide & mute (press again to restore)",
+    },
     { keys: ["?"], desc: "Show this shortcuts overview" },
   ];
 

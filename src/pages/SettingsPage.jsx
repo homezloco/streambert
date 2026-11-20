@@ -41,6 +41,16 @@ import {
 import { collectBackupData, restoreBackupData } from "../utils/backup";
 import { formatBytes } from "../utils/storage";
 
+// ── Relative-time label ("3m ago", "2d ago") for stat tooltips ───────────────
+const relAgo = (ts) => {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+};
+
 // ── Custom Select ─────────────────────────────────────────────────────────────
 function SettingsSelect({ value, onChange, options, style }) {
   const [open, setOpen] = useState(false);
@@ -5460,6 +5470,7 @@ export default function SettingsPage({
                   return {
                     s,
                     total,
+                    last: st.last || 0,
                     pct: total ? Math.round((st.ok / total) * 100) : 0,
                   };
                 })
@@ -5481,22 +5492,31 @@ export default function SettingsPage({
                       marginBottom: 12,
                     }}
                   >
-                    {rows.map(({ s, total, pct }) => (
+                    {rows.map(({ s, total, last, pct }) => (
                       <div
                         key={s.id}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
+                          gap: 6,
                           background: "var(--surface2)",
                           borderRadius: 6,
                           padding: "6px 10px",
                           fontSize: 12,
                         }}
                       >
-                        <span style={{ color: "var(--text1)" }}>{s.label}</span>
+                        <span
+                          style={{ color: "var(--text1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={s.label}
+                        >
+                          {s.label}
+                        </span>
                         <span
                           style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
                             color:
                               pct >= 70
                                 ? "#48c774"
@@ -5504,8 +5524,22 @@ export default function SettingsPage({
                                   ? "#e8b33e"
                                   : "#ff5d5d",
                           }}
+                          title={last ? `Last played ${relAgo(last)}` : ""}
                         >
                           {pct}% · {total}
+                          <button
+                            className="btn btn-ghost"
+                            style={{ fontSize: 11, padding: "0 4px", lineHeight: 1.4 }}
+                            title={`Forget learned stats for ${s.label}`}
+                            onClick={() => {
+                              const stats = { ...getSourceStats() };
+                              delete stats[s.id];
+                              storage.set(STORAGE_KEYS.SOURCE_STATS, stats);
+                              setSrcStatsVersion((v) => v + 1);
+                            }}
+                          >
+                            ✕
+                          </button>
                         </span>
                       </div>
                     ))}

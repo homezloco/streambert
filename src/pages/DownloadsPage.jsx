@@ -8,7 +8,7 @@ import {
   WatchedIcon,
   SubtitlesIcon,
 } from "../components/Icons";
-import { storage, isElectron, STORAGE_KEYS } from "../utils/storage";
+import { storage, isElectron, STORAGE_KEYS, formatBytes } from "../utils/storage";
 import { playerDefaults } from "../utils/playerPrefs";
 import SubtitleDownloaderModal from "../components/SubtitleDownloaderModal";
 import { imgUrl } from "../utils/api";
@@ -72,6 +72,9 @@ function parseSize(str) {
   };
   return n * (map[m[2].toUpperCase()] || 1);
 }
+
+// Reuse storage's byte formatter for the header totals
+const fmtSize = (bytes) => formatBytes(bytes);
 
 const SORT_OPTIONS = [
   { value: "date", label: "Date" },
@@ -231,6 +234,13 @@ export default function DownloadsPage({
 
   const q = searchQuery.trim().toLowerCase();
   const searchResultCount = q ? allLocalItems.length : null;
+
+  // Total size of the visible local items for the header line
+  const totalLocalSize = useMemo(
+    () =>
+      fmtSize(allLocalItems.reduce((sum, d) => sum + parseSize(d.size), 0)),
+    [allLocalItems],
+  );
 
   // Playback progress reported by the in-app player window — persist it
   // under the same dlTime_ key the card reads, and push it live into the UI
@@ -557,7 +567,7 @@ export default function DownloadsPage({
                 }}
               >
                 {allLocalItems.length} item
-                {allLocalItems.length === 1 ? "" : "s"}
+                {allLocalItems.length === 1 ? "" : "s"} · {totalLocalSize}
               </span>
             )}
             {allLocalItems.some(
