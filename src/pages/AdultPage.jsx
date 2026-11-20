@@ -529,7 +529,7 @@ export default function AdultPage() {
   // back to significant words from their titles.
   const [reco, setReco] = useState([]);
   useEffect(() => {
-    if (mode !== "browse" || recents.length === 0) {
+    if ((mode !== "browse" && mode !== "home") || recents.length === 0) {
       setReco([]);
       return;
     }
@@ -1377,6 +1377,23 @@ export default function AdultPage() {
                     key={v.id}
                     v={v}
                     seen
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            </div>
+          )}
+          {reco.length > 0 && (
+            <div className="adult-reco">
+              <div className="section-title" style={{ fontSize: 14 }}>
+                Recommended for you
+              </div>
+              <ScrollRow>
+                {reco.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen={recents.some((r) => r.id === v.id)}
                     onPlay={() => setPlaying(v)}
                   />
                 ))}
