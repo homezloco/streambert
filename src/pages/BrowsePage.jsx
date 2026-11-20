@@ -32,10 +32,26 @@ export default function BrowsePage({
   onMarkUnwatched,
   initial,
 }) {
-  const [type, setType] = useState(initial?.type === "tv" ? "tv" : "movie");
-  const [sort, setSort] = useState(initial?.sort || "popularity.desc");
+  const [type, _setType] = useState(
+    initial?.type === "tv" ? "tv" : storage.get("browseType") || "movie",
+  );
+  const setType = (v) => {
+    storage.set("browseType", v);
+    _setType(v);
+  };
+  const [sort, _setSort] = useState(
+    initial?.sort || storage.get("browseSort") || "popularity.desc",
+  );
+  const setSort = (v) => {
+    storage.set("browseSort", v);
+    _setSort(v);
+  };
   const [genre, setGenre] = useState(initial?.genre || null);
-  const [decade, setDecade] = useState("");
+  const [decade, _setDecade] = useState(storage.get("browseDecade") || "");
+  const setDecade = (v) => {
+    storage.set("browseDecade", v);
+    _setDecade(v);
+  };
   // "Hide watched" — persisted so it survives page switches
   const [hideWatched, _setHideWatched] = useState(
     () => storage.get("browseHideWatched") === true,

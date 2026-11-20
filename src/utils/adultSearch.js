@@ -126,7 +126,7 @@ export const SEARCH_SOURCES = [
       try {
         const u =
           `${EPORNER_API}?query=all&per_page=30&page=${page}` +
-          `&thumbsize=big&order=${order === "top-rated" ? "top-rated" : "popular"}`;
+          `&thumbsize=big&order=${["popular", "top-rated", "latest"].includes(order) ? order : "popular"}`;
         const data = await (await fetch(u)).json();
         return (data?.videos || []).map(epornerItem);
       } catch {
@@ -151,7 +151,12 @@ export const SEARCH_SOURCES = [
     // Empty query + ordering works — the API lists its whole catalog
     async browse(order, page) {
       try {
-        const o = order === "top-rated" ? "rating" : "mostviewed";
+        const o =
+          order === "top-rated"
+            ? "rating"
+            : order === "latest"
+              ? "newest"
+              : "mostviewed";
         const u =
           `https://www.pornhub.com/webmasters/search` +
           `?ordering=${o}&page=${page}&thumbsize=big`;
@@ -179,7 +184,12 @@ export const SEARCH_SOURCES = [
     },
     async browse(order, page) {
       try {
-        const o = order === "top-rated" ? "rating" : "mostviewed";
+        const o =
+          order === "top-rated"
+            ? "rating"
+            : order === "latest"
+              ? "newest"
+              : "mostviewed";
         const u =
           `https://api.redtube.com/?data=redtube.Videos.searchVideos` +
           `&output=json&ordering=${o}` +

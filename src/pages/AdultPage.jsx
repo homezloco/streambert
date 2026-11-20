@@ -431,6 +431,10 @@ export default function AdultPage() {
   const [hideSeen, setHideSeen] = useState(
     () => storage.get("adultHideSeen") === true,
   );
+  // 🌐 All-mode site chips — sites to hide from merged results
+  const [hideSites, setHideSites] = useState(
+    () => storage.get("adultSiteHide") || [],
+  );
   // Grid density for the Browse view — "s" | "m" | "l", persisted
   const [gridSize, _setGridSize] = useState(
     () => storage.get("adultGridSize") || "m",
@@ -585,7 +589,11 @@ export default function AdultPage() {
   }, [mode, recents]);
 
   // ── Home tab: Continue Watching / Watch Again / Trending / Top Rated ──
-  const [homeData, setHomeData] = useState({ trending: [], top: [] });
+  const [homeData, setHomeData] = useState({
+    trending: [],
+    top: [],
+    latest: [],
+  });
   useEffect(() => {
     if (mode !== "home") return;
     let dead = false;
@@ -600,10 +608,14 @@ export default function AdultPage() {
             .then((r) => r.json())
             .then((d) => (Array.isArray(d?.videos) ? d.videos : []))
             .catch(() => [])
-        : browseAllSites(order).then((items) => items.map(toCardV));
-    Promise.all([get("popular"), get("top-rated")]).then(([tr, tp]) => {
-      if (!dead) setHomeData({ trending: tr, top: tp });
-    });
+        : browseAllSites(order === "latest" ? "latest" : order).then(
+            (items) => items.map(toCardV),
+          );
+    Promise.all([get("popular"), get("top-rated"), get("latest")]).then(
+      ([tr, tp, lt]) => {
+        if (!dead) setHomeData({ trending: tr, top: tp, latest: lt });
+      },
+    );
     return () => {
       dead = true;
     };
@@ -664,6 +676,12 @@ export default function AdultPage() {
     .filter((r) => !homeResumeSecs(r.id))
     .slice(0, 12)
     .map(recentToCard);
+
+  // Shared seen-check + hide-seen filter for the catalog rows
+  const isRecentVid = (v) =>
+    recents.some((r) => r.id === v.id || (v.url && r.url === v.url));
+  const hideFilter = (list) =>
+    hideSeen ? list.filter((v) => !isRecentVid(v)) : list;
 
   // ── Downloading: reuse the movie downloader once a stream URL is captured ──
   const [streamUrl, setStreamUrl] = useState(null); // captured .m3u8
@@ -1424,17 +1442,17 @@ export default function AdultPage() {
               </ScrollRow>
             </div>
           )}
-          {reco.length > 0 && (
+          {hideFilter(reco).length > 0 && (
             <div className="adult-reco">
               <div className="section-title" style={{ fontSize: 14 }}>
                 Recommended for you
               </div>
               <ScrollRow>
-                {reco.map((v) => (
+                {hideFilter(reco).map((v) => (
                   <AdultCard
                     key={v.id}
                     v={v}
-                    seen={recents.some((r) => r.id === v.id)}
+                    seen={isRecentVid(v)}
                     onPlay={() => setPlaying(v)}
                   />
                 ))}
@@ -1464,13 +1482,11 @@ export default function AdultPage() {
             </div>
             {homeData.trending.length ? (
               <ScrollRow>
-                {homeData.trending.map((v) => (
+                {hideFilter(homeData.trending).map((v) => (
                   <AdultCard
                     key={v.id}
                     v={v}
-                    seen={recents.some(
-                      (r) => r.id === v.id || (v.url && r.url === v.url),
-                    )}
+                    seen={isRecentVid(v)}
                     onPlay={() => setPlaying(v)}
                   />
                 ))}
@@ -1487,13 +1503,32 @@ export default function AdultPage() {
             </div>
             {homeData.top.length ? (
               <ScrollRow>
-                {homeData.top.map((v) => (
+                {hideFilter(homeData.top).map((v) => (
                   <AdultCard
                     key={v.id}
                     v={v}
-                    seen={recents.some(
-                      (r) => r.id === v.id || (v.url && r.url === v.url),
-                    )}
+                    seen={isRecentVid(v)}
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            ) : (
+              <div className="loader">
+                <div className="spinner" />
+              </div>
+            )}
+          </div>
+          <div className="adult-reco">
+            <div className="section-title" style={{ fontSize: 14 }}>
+              Latest
+            </div>
+            {homeData.latest.length ? (
+              <ScrollRow>
+                {hideFilter(homeData.latest).map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen={isRecentVid(v)}
                     onPlay={() => setPlaying(v)}
                   />
                 ))}
@@ -1565,17 +1600,17 @@ export default function AdultPage() {
               </button>
             </div>
           )}
-          {reco.length > 0 && (
+          {hideFilter(reco).length > 0 && (
             <div className="adult-reco">
               <div className="section-title" style={{ fontSize: 14 }}>
                 Recommended for you
               </div>
               <ScrollRow>
-                {reco.map((v) => (
+                {hideFilter(reco).map((v) => (
                   <AdultCard
                     key={v.id}
                     v={v}
-                    seen={recents.some((r) => r.id === v.id)}
+                    seen={isRecentVid(v)}
                     onPlay={() => setPlaying(v)}
                   />
                 ))}
@@ -1616,6 +1651,25 @@ export default function AdultPage() {
             >
               Hide seen
             </button>
+            {searchAll &&
+              [...new Set(videos.map((v) => v.site).filter(Boolean))].map(
+                (s) => (
+                  <button
+                    key={s}
+                    className={`browse-chip${hideSites.includes(s) ? "" : " browse-chip--active"}`}
+                    title={`Toggle ${s} results`}
+                    onClick={() => {
+                      const next = hideSites.includes(s)
+                        ? hideSites.filter((x) => x !== s)
+                        : [...hideSites, s];
+                      storage.set("adultSiteHide", next);
+                      setHideSites(next);
+                    }}
+                  >
+                    {s}
+                  </button>
+                ),
+              )}
             <button
               className="browse-chip"
               title="Play a random video (prefers unwatched)"
@@ -1644,6 +1698,7 @@ export default function AdultPage() {
 
           <div className={`adult-grid adult-grid--${gridSize}`}>
             {videos
+              .filter((v) => !hideSites.includes(v.site))
               .filter(
                 (v) =>
                   !hideSeen ||
