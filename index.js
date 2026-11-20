@@ -12,6 +12,7 @@ const {
   globalShortcut,
 } = require("electron");
 const path = require("path");
+const fs = require("fs");
 
 // -- RAM / performance flags ---------------------------------------------------
 // Low-RAM mode is ON by default. Disable it with STREAMBERT_LOW_RAM=0.
@@ -560,7 +561,13 @@ function setYoutubeConsentCookies(sess) {
   }
 }
 
-function setupSession(playerSession, trailerSession) {
+// Applies the shared guest-webview hardening to a session: response-header
+// stripping (X-Frame-Options/CSP so embeds can frame), download blocking, and
+// tracker/ad blocking. With captureMedia it also intercepts m3u8/vtt/mp4 URLs
+// for the renderer and records request headers for stream replay.
+// Used for persist:player, persist:trailer, and each persist:adult_<site>
+// partition (per-site isolation so adult sites can't share cookie state).
+function configureGuestSession(sess, { captureMedia = false } = {}) {
   const stripHeaders = (details, callback) => {
     const headers = { ...details.responseHeaders };
     for (const key of Object.keys(headers)) {
@@ -571,37 +578,22 @@ function setupSession(playerSession, trailerSession) {
     callback({ responseHeaders: headers });
   };
 
-  // Use the REAL Chromium UA of this Electron build, only without the
-  // "Electron/x.y.z" and app-name tokens.
-  const UA = buildCleanUserAgent();
-  // The player session keeps Electron's untouched default UA: setUserAgent() is
-  // applied only after the first <webview> already started loading, so the first
-  // player used the default UA and passed cloudflare Turnstile, while every later player
-  // used the modified UA and failed with error 600010.
-  // playerSession.setUserAgent(UA); <--- removed on purpose
+  // No browser downloads from guest pages (also covers the pop-out).
+  // Video/subtitle downloads go exclusively through the app's own download
+  // manager, never through the webview.
+  sess.on("will-download", (event) => event.preventDefault());
 
-  // No browser downloads from player/trailer pages (also covers the pop-out,
-  // which uses the player partition). Video/subtitle downloads go exclusively
-  // through the app's own download manager, never through the webview.
-  const blockDownloads = (event) => event.preventDefault();
-  playerSession.on("will-download", blockDownloads);
-  trailerSession.on("will-download", blockDownloads);
+  sess.webRequest.onHeadersReceived({ urls: ["*://*/*"] }, stripHeaders);
 
-  playerSession.webRequest.onHeadersReceived(
-    { urls: ["*://*/*"] },
-    stripHeaders,
-  );
-  trailerSession.webRequest.onHeadersReceived(
-    { urls: ["*://*/*"] },
-    stripHeaders,
-  );
+  if (!captureMedia) {
+    // Ads only (no media intercept needed)
+    sess.webRequest.onBeforeRequest({ urls: BLOCKED_HOSTS }, (_, cb) =>
+      cb({ cancel: true }),
+    );
+    return;
+  }
 
-  // Trailer: block ads only (no media intercept needed)
-  trailerSession.webRequest.onBeforeRequest({ urls: BLOCKED_HOSTS }, (_, cb) =>
-    cb({ cancel: true }),
-  );
-
-  // Player session: block ads + intercept m3u8/vtt/mp4 URLs for renderer
+  // Block ads + intercept m3u8/vtt/mp4 URLs for renderer
   const MEDIA_URLS = [
     "*://*/*.m3u8*",
     "*://*/*.m3u8",
@@ -610,7 +602,7 @@ function setupSession(playerSession, trailerSession) {
     "*://*/*.mp4*",
     "*://*/*.mp4",
   ];
-  playerSession.webRequest.onBeforeRequest(
+  sess.webRequest.onBeforeRequest(
     { urls: [...BLOCKED_HOSTS, ...MEDIA_URLS] },
     (details, callback) => {
       const { url } = details;
@@ -668,7 +660,7 @@ function setupSession(playerSession, trailerSession) {
   // Performance: the request is released immediately and recorded only once
   // per URL, so live playlists that are re-requested every few seconds add
   // no latency or repeated work.
-  playerSession.webRequest.onBeforeSendHeaders(
+  sess.webRequest.onBeforeSendHeaders(
     {
       urls: [
         "*://*/*.m3u8*",
@@ -701,8 +693,27 @@ function setupSession(playerSession, trailerSession) {
     },
   );
 
+}
+
+function setupSession(playerSession, trailerSession) {
+  configureGuestSession(playerSession, { captureMedia: true });
+  configureGuestSession(trailerSession, { captureMedia: false });
   // YouTube consent cookie → suppress consent gate (trailer session only)
   setYoutubeConsentCookies(trailerSession);
+}
+
+// Lazily apply the same hardening to per-site adult partitions on first use.
+const configuredAdultSessions = new Set();
+function configureAdultSessionIfNeeded(sess) {
+  const part = sess.partition;
+  if (
+    typeof part !== "string" ||
+    !part.startsWith("persist:adult_") ||
+    configuredAdultSessions.has(part)
+  )
+    return;
+  configuredAdultSessions.add(part);
+  configureGuestSession(sess, { captureMedia: true });
 }
 
 function createWindow() {
@@ -755,13 +766,22 @@ function createWindow() {
 
   // Configure the player/trailer sessions BEFORE the guest is created, so the
   // very first player load already has ad blocking + document-start guards.
-  mainWindow.webContents.on("will-attach-webview", () => {
-    if (sessionsConfigured) return;
-    sessionsConfigured = true;
-    setupSession(
-      session.fromPartition("persist:player"),
-      session.fromPartition("persist:trailer"),
-    );
+  mainWindow.webContents.on("will-attach-webview", (_, webPreferences) => {
+    if (!sessionsConfigured) {
+      sessionsConfigured = true;
+      setupSession(
+        session.fromPartition("persist:player"),
+        session.fromPartition("persist:trailer"),
+      );
+    }
+    // Per-site adult partitions: configure before the guest's first load so
+    // ad blocking / header stripping / stream capture apply from request one.
+    const part = webPreferences && webPreferences.partition;
+    if (typeof part === "string" && part.startsWith("persist:adult_")) {
+      try {
+        configureAdultSessionIfNeeded(session.fromPartition(part));
+      } catch {}
+    }
   });
 
   // Block popups from webviews, intercept fullscreen, lazy-init sessions
@@ -777,6 +797,11 @@ function createWindow() {
       // Downloads can replay Referer/Origin for hosts that 403 without them
       downloadsIpc.setStreamMetaLookup((u) => playerIpc.getStreamMeta(u));
     }
+
+    // Per-site adult partitions get the same hardening as persist:player
+    try {
+      configureAdultSessionIfNeeded(wc.session);
+    } catch {}
 
     // Track player webviews for cleanup on player-stopped
     try {
@@ -878,10 +903,22 @@ app.whenReady().then(() => networkIpc.applyNetwork());
 ipcMain.handle("get-block-stats", () => blockStats.getBlockStats());
 
 // Wipe the player partition's cookies/cache/site data — clears embedded-site
-// logins (e.g. Fansly) and any state streaming sites persisted.
+// logins (e.g. Fansly) and any state streaming sites persisted. Also wipes
+// every per-site adult partition (persist:adult_*) discovered under
+// userData/Partitions.
 ipcMain.handle("clear-player-session", async () => {
   try {
     await session.fromPartition("persist:player").clearData();
+    const partsDir = path.join(app.getPath("userData"), "Partitions");
+    const dirs = fs.existsSync(partsDir) ? fs.readdirSync(partsDir) : [];
+    for (const dir of dirs) {
+      if (dir.startsWith("adult_")) {
+        try {
+          await session.fromPartition(`persist:${dir}`).clearData();
+          configuredAdultSessions.delete(`persist:${dir}`);
+        } catch {}
+      }
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };

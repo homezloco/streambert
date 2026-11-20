@@ -1572,7 +1572,7 @@ export default function AdultPage() {
           ref={webviewRef}
           key={`${mode}-${current.id}`}
           src={current.url}
-          partition="persist:player"
+          partition={`persist:adult_${current.id}`}
           allowpopups="false"
           sandbox="allow-scripts allow-same-origin allow-forms"
           className="adult-webview"

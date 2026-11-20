@@ -81,8 +81,8 @@ JSON export of history + progress + saved list (backup module exists — check i
 
 ## 5. Privacy hardening
 
-### 5.1 Per-site session isolation **[medium]**
-Adult sites currently share `persist:player`. Per-site partitions (`persist:adult-<siteId>`) stop cross-site cookie correlation. Trade-off: per-site storage growth; needs the capture/intercept listeners applied to each partition.
+### ~~5.1 Per-site session isolation~~ ✅
+Adult browsing webviews now use `persist:adult_<siteId>` partitions — cookies/storage can't be correlated across sites. Each partition lazily gets the same hardening as `persist:player` (header stripping, ad/tracker blocking, m3u8/mp4/vtt capture, download blocking) via `configureGuestSession`, and "clear site data" wipes all `adult_*` partitions too.
 
 ### 5.2 Tor/proxy per-section routing
 Route adult-section traffic through a different proxy than regular. Electron `session.setProxy` is per-session, so this composes with 5.1.
