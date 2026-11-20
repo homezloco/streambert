@@ -118,6 +118,10 @@ contextBridge.exposeInMainWorld("electron", {
   getBlockStats: () => ipcRenderer.invoke("get-block-stats"),
   clearPlayerSession: () => ipcRenderer.invoke("clear-player-session"),
   getAdultChannels: (args) => ipcRenderer.invoke("adult-channels", args),
+  getWidevineStatus: () => ipcRenderer.invoke("widevine-status"),
+  installWidevine: () => ipcRenderer.invoke("widevine-install"),
+  removeWidevine: () => ipcRenderer.invoke("widevine-remove"),
+  restartApp: () => ipcRenderer.invoke("restart-app"),
 
   // Desktop notifications (triggered from renderer, executed in main)
   showNotification: ({ title, body, silent }) =>

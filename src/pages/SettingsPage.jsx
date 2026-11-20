@@ -2960,6 +2960,126 @@ function PlayerDefaultsSection() {
   );
 }
 
+// ── Widevine CDM ───────────────────────────────────────────────────────────
+// Lets subscription services (Services page: Netflix, Paramount+, Crave…)
+// play DRM video. Downloads the official CDM from Google's CDN into
+// userData/widevine (+ a beside-binary mirror) and registers
+// --widevine-cdm-path on next launch.
+function WidevineSection() {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = () =>
+    window.electron
+      ?.getWidevineStatus?.()
+      .then(setStatus)
+      .catch(() => {});
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const install = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await window.electron?.installWidevine?.();
+      if (r?.ok) refresh();
+      else setError(r?.error || "Install failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await window.electron?.removeWidevine?.();
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rowLabel = {
+    fontSize: 13,
+    color: "var(--text2)",
+    display: "block",
+    marginBottom: 6,
+  };
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div className="settings-section-title">Widevine CDM</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        DRM services on the Services page (Netflix, Paramount+, Crave, Disney+…)
+        need Google's Widevine Content Decryption Module. Electron can't ship
+        it, so Streambert downloads the official CDM zip on demand (~3 MB) —
+        the same component Chromium itself fetches.
+      </div>
+      <label style={rowLabel}>Status</label>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        <span style={{ fontSize: 13 }}>
+          {!status
+            ? "…"
+            : status.installed
+              ? status.loadedAtLaunch
+                ? `✓ Active — Widevine ${status.version || ""}`
+                : `✓ Installed (v${status.version || "?"}) — restart to activate`
+              : "Not installed"}
+        </span>
+        {status?.installed && !status.loadedAtLaunch && (
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12 }}
+            onClick={() => window.electron?.restartApp?.()}
+          >
+            Restart now
+          </button>
+        )}
+        {!status?.installed && (
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12 }}
+            disabled={busy}
+            onClick={install}
+          >
+            {busy ? "Downloading…" : "Install Widevine CDM"}
+          </button>
+        )}
+        {status?.installed && (
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12 }}
+            disabled={busy}
+            onClick={remove}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {error && (
+        <div style={{ fontSize: 12, color: "#ff5d5d" }}>{error}</div>
+      )}
+    </div>
+  );
+}
+
 // ── Adult Section (18+) Defaults ─────────────────────────────────────────────
 // Option ids mirror the ORDERS / DURS / RATINGS / grid-size lists in
 // AdultPage.jsx so defaults picked here line up exactly with its filters.
@@ -5150,6 +5270,10 @@ export default function SettingsPage({
           <Divider />
 
           <PlayerDefaultsSection />
+
+          <Divider />
+
+          <WidevineSection />
 
           <Divider />
 

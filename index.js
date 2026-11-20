@@ -49,9 +49,11 @@ const hianimeIpc = require("./src/ipc/hianime");
 const playerIpc = require("./src/ipc/player");
 const networkIpc = require("./src/ipc/network");
 const adultChannelsIpc = require("./src/ipc/adultChannels");
+const widevineIpc = require("./src/ipc/widevine");
 
 // WebRTC IP-leak protection is a command-line switch — must land before ready.
 networkIpc.applyWebRtcFlag();
+widevineIpc.applyWidevineFlag();
 const discordRpc = require("./src/ipc/discordRpc");
 
 // -- Ad/tracker block list -----------------------------------------------------
@@ -907,6 +909,7 @@ hianimeIpc.setProgressListener?.(({ file, t, d }) => {
 discordRpc.register(ipcMain);
 networkIpc.register();
 adultChannelsIpc.register();
+widevineIpc.register();
 app.whenReady().then(() => networkIpc.applyNetwork());
 
 // get-block-stats lives with its data

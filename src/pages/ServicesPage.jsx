@@ -90,6 +90,10 @@ export default function ServicesPage() {
     storage.set("svcFavs", next);
   };
   const [filter, setFilter] = useState("");
+  const [wvStatus, setWvStatus] = useState(null);
+  useEffect(() => {
+    window.electron?.getWidevineStatus?.().then(setWvStatus).catch(() => {});
+  }, []);
   const [findOpen, setFindOpen] = useState(false);
   const [findText, setFindText] = useState("");
   const [findResult, setFindResult] = useState(null);
@@ -319,10 +323,17 @@ export default function ServicesPage() {
             </span>
           )}
         </div>
-        {current.drm && (
+        {current.drm && wvStatus && !wvStatus.installed && (
           <div className="svc-drm-note">
             🔒 {current.name} uses Widevine DRM — sign-in and browsing work,
-            playback may fail until Streambert ships the CDM.
+            playback needs the CDM. Install it under Settings → Playback →
+            Widevine CDM.
+          </div>
+        )}
+        {current.drm && wvStatus?.installed && !wvStatus.loadedAtLaunch && (
+          <div className="svc-drm-note">
+            🔒 Widevine installed — restart the app once to activate DRM
+            playback on {current.name}.
           </div>
         )}
       </div>
