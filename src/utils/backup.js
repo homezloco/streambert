@@ -53,6 +53,18 @@ export const BACKUP_KEYS = [
   "notifyNewEpisode",
   // Episode-release cache
   "episodeReleaseCache",
+  // Browse page persisted filters
+  "browseType",
+  "browseSort",
+  "browseDecade",
+  "browseHideWatched",
+  // Player defaults & custom speed presets
+  "playerDefRate",
+  "playerDefVol",
+  "playerDefMuted",
+  "playerDefCueSize",
+  "playerDefSubOff",
+  "playerSpeeds",
   // Source reliability learning
   "sourceStats",
   "titleSources",
@@ -64,11 +76,15 @@ export const BACKUP_KEYS = [
   "adultGay",
   "adultCat",
   "adultHideSeen",
+  "adultSiteHide",
   "adultGridSize",
   "adultSite",
   "adultImgSite",
   "adultCreatorSite",
   "adultSiteFavs",
+  "adultChanSite",
+  "adultChanSort",
+  "adultChanFavs",
   "adultRecents",
   // PIN hashes (only the SHA-256 digests are stored/exported, never PINs)
   "adultPinHash",

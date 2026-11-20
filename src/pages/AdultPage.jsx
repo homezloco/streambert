@@ -374,6 +374,19 @@ export default function AdultPage() {
     storage.set("adultChanSort", v);
     _setChanSort(v);
   };
+  // Pinned channels: siteId:slug → the channel object (shown first)
+  const [chanFavs, setChanFavs] = useState(
+    () => storage.get("adultChanFavs") || {},
+  );
+  const toggleChanFav = (c) => {
+    const key = `${c.siteId}:${c.slug}`;
+    const next = { ...chanFavs };
+    if (next[key]) delete next[key];
+    else next[key] = c;
+    setChanFavs(next);
+    storage.set("adultChanFavs", next);
+  };
+  const [chanFilter, setChanFilter] = useState("");
   const [favs, setFavs] = useState(() => storage.get("adultSiteFavs") || []);
   const toggleFav = (id) => {
     const next = favs.includes(id)
@@ -1661,6 +1674,12 @@ export default function AdultPage() {
                 {s.label}
               </button>
             ))}
+            <input
+              className="adult-search site-filter"
+              placeholder="Filter channels…"
+              value={chanFilter}
+              onChange={(e) => setChanFilter(e.target.value)}
+            />
             <select
               className="browse-sort"
               value={chanSort}
@@ -1683,7 +1702,18 @@ export default function AdultPage() {
           ) : (
             <>
               <div className="chan-grid">
-                {channels.map((c) => (
+                {(() => {
+                  const q = chanFilter.trim().toLowerCase();
+                  const all = [
+                    ...Object.values(chanFavs),
+                    ...channels.filter(
+                      (c) => !chanFavs[`${c.siteId}:${c.slug}`],
+                    ),
+                  ];
+                  const shown = q
+                    ? all.filter((c) => c.name.toLowerCase().includes(q))
+                    : all;
+                  return shown.map((c) => (
                   <button
                     key={`${c.siteId}:${c.slug}`}
                     className="chan-card"
@@ -1695,6 +1725,20 @@ export default function AdultPage() {
                       })
                     }
                   >
+                    <span
+                      className={`fav-star chan-star${chanFavs[`${c.siteId}:${c.slug}`] ? " fav-star--on" : ""}`}
+                      title={
+                        chanFavs[`${c.siteId}:${c.slug}`]
+                          ? "Unpin"
+                          : "Pin to front"
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleChanFav(c);
+                      }}
+                    >
+                      ★
+                    </span>
                     <div className="chan-avatar-wrap">
                       {c.avatar ? (
                         <img
@@ -1718,7 +1762,8 @@ export default function AdultPage() {
                       {c.views > 0 && <span>{fmtViews(c.views)} views</span>}
                     </div>
                   </button>
-                ))}
+                  ));
+                })()}
               </div>
               {!channels.length && !chanLoading && (
                 <div className="adult-empty">
