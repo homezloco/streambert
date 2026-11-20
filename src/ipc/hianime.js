@@ -821,7 +821,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
   gear.addEventListener('click',(e)=>{e.stopPropagation();menu.hidden=!menu.hidden;});
   menu.addEventListener('click',(e)=>e.stopPropagation());
   document.addEventListener('click',()=>{menu.hidden=true;});
-  const SPEEDS=[0.75,1,1.25,1.5,2];
+  const SPEEDS=(Array.isArray(DEF.speeds)&&DEF.speeds.length)?DEF.speeds:[0.75,1,1.25,1.5,2];
   function rebuildSpeeds(){
     speedsBox.innerHTML='';
     SPEEDS.forEach((r)=>{
@@ -1753,6 +1753,15 @@ function sanitizePlayerPrefs(p) {
   if (v !== undefined) out.cueSize = v;
   v = num(p.subOff, -30, 30);
   if (v !== undefined) out.subOff = v;
+  if (Array.isArray(p.speeds)) {
+    const seen = new Set();
+    const speeds = p.speeds
+      .filter((n) => typeof n === "number" && n >= 0.25 && n <= 4)
+      .filter((n) => !seen.has(n) && seen.add(n))
+      .sort((a, b) => a - b)
+      .slice(0, 10);
+    if (speeds.length) out.speeds = speeds;
+  }
   return out;
 }
 

@@ -122,6 +122,7 @@ export default function MoviePage({
   playerSourceRef.current = playerSource;
   // Source reliability: true once this play produced a stream or video
   const statsOkRef = useRef(false);
+  const playStartRef = useRef(Date.now());
   // Guard: at most one stats-driven auto-switch per play
   const autoSwitchedRef = useRef(false);
   // One-shot resume seek per play
@@ -581,7 +582,11 @@ export default function MoviePage({
       // and remember it for this title
       if (!statsOkRef.current) {
         statsOkRef.current = true;
-        recordSourceResult(playerSourceRef.current, true);
+        recordSourceResult(
+          playerSourceRef.current,
+          true,
+          Date.now() - playStartRef.current,
+        );
         recordTitleSource(progressKeyRef.current, playerSourceRef.current);
       }
     });
@@ -593,6 +598,7 @@ export default function MoviePage({
     if (!m3u8Url) {
       statsOkRef.current = false;
       resumedRef.current = false;
+      playStartRef.current = Date.now();
     }
   }, [m3u8Url]);
 
@@ -855,7 +861,11 @@ export default function MoviePage({
             // Video actually playing (covers progressive mp4 too) → source ok
             if (ct > 2 && !statsOkRef.current) {
               statsOkRef.current = true;
-              recordSourceResult(playerSource, true);
+              recordSourceResult(
+                playerSource,
+                true,
+                Date.now() - playStartRef.current,
+              );
               recordTitleSource(progressKey, playerSource);
             }
 

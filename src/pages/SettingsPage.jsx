@@ -24,6 +24,7 @@ import {
   DEFAULT_CUSTOM_VARS,
 } from "../utils/appearance";
 import { SUBTITLE_LANGUAGES } from "../utils/subtitles";
+import { parseSpeedList } from "../utils/playerPrefs";
 import { DEFAULT_INVIDIOUS_BASE } from "../components/TrailerModal";
 import { RATING_COUNTRIES } from "../utils/ageRating";
 import { WarningIcon } from "../components/Icons";
@@ -2719,6 +2720,9 @@ function PlayerDefaultsSection() {
   const [subOff, setSubOff] = useState(
     () => storage.get("playerDefSubOff") ?? "",
   );
+  const [speeds, setSpeeds] = useState(
+    () => storage.get("playerSpeeds") ?? "",
+  );
   const [saved, setSaved] = useState(false);
 
   const flash = () => {
@@ -2743,6 +2747,18 @@ function PlayerDefaultsSection() {
       const c = Math.max(-10, Math.min(10, n));
       setSubOff(c);
       storage.set("playerDefSubOff", c);
+    }
+    flash();
+  };
+
+  const commitSpeeds = () => {
+    const list = parseSpeedList(speeds);
+    if (!list.length) {
+      setSpeeds("");
+      storage.remove("playerSpeeds");
+    } else {
+      setSpeeds(list.join(", "));
+      storage.set("playerSpeeds", list.join(", "));
     }
     flash();
   };
@@ -2888,6 +2904,47 @@ function PlayerDefaultsSection() {
                 }}
               >
                 Reset to Auto
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">Speed presets</div>
+            <div className="settings-desc">
+              Buttons shown in the player's speed menu — comma-separated,
+              0.25–4×. Empty keeps the defaults (0.75 / 1 / 1.25 / 1.5 / 2).
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <input
+              type="text"
+              className="apikey-input"
+              style={{ width: 200, marginBottom: 0 }}
+              placeholder="0.75, 1, 1.25, 1.5, 2"
+              value={speeds}
+              onChange={(e) => setSpeeds(e.target.value)}
+              onBlur={commitSpeeds}
+            />
+            {speeds !== "" && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 12 }}
+                onClick={() => {
+                  setSpeeds("");
+                  storage.remove("playerSpeeds");
+                  flash();
+                }}
+              >
+                Reset
               </button>
             )}
           </div>
@@ -5472,6 +5529,7 @@ export default function SettingsPage({
                     s,
                     total,
                     last: st.last || 0,
+                    lat: st.lat || 0,
                     pct: total ? Math.round((st.ok / total) * 100) : 0,
                   };
                 })
@@ -5493,7 +5551,7 @@ export default function SettingsPage({
                       marginBottom: 12,
                     }}
                   >
-                    {rows.map(({ s, total, last, pct }) => (
+                    {rows.map(({ s, total, last, lat, pct }) => (
                       <div
                         key={s.id}
                         style={{
@@ -5528,6 +5586,14 @@ export default function SettingsPage({
                           title={last ? `Last played ${relAgo(last)}` : ""}
                         >
                           {pct}% · {total}
+                          {lat > 0 && (
+                            <span
+                              style={{ color: "var(--text3)", fontSize: 11 }}
+                              title={`Avg time to first stream: ${(lat / 1000).toFixed(1)}s`}
+                            >
+                              ~{(lat / 1000).toFixed(1)}s
+                            </span>
+                          )}
                           <button
                             className="btn btn-ghost"
                             style={{ fontSize: 11, padding: "0 4px", lineHeight: 1.4 }}

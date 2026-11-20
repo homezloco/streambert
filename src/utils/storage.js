@@ -153,15 +153,25 @@ export const clearFailoverSource = (epKey) => {
 export const getSourceStats = () =>
   storage.get(STORAGE_KEYS.SOURCE_STATS) || {};
 
-export const recordSourceResult = (sourceId, ok) => {
+export const recordSourceResult = (sourceId, ok, latencyMs) => {
   if (!sourceId) return;
   const stats = { ...getSourceStats() };
   const prev = stats[sourceId] || {};
-  stats[sourceId] = {
+  const next = {
     ok: (prev.ok || 0) + (ok ? 1 : 0),
     fail: (prev.fail || 0) + (ok ? 0 : 1),
     last: Date.now(),
   };
+  // Average time-to-first-stream (EMA over successful plays)
+  if (ok && Number.isFinite(latencyMs) && latencyMs > 0) {
+    next.lat =
+      prev.lat == null
+        ? Math.round(latencyMs)
+        : Math.round(prev.lat * 0.7 + latencyMs * 0.3);
+  } else if (prev.lat != null) {
+    next.lat = prev.lat;
+  }
+  stats[sourceId] = next;
   storage.set(STORAGE_KEYS.SOURCE_STATS, stats);
 };
 

@@ -22,8 +22,8 @@ Share position + play/pause between two Streambert instances (or one instance + 
 ### ~~1.5 Subtitle sync offset~~ — DONE
 ± slider in the gear menu for mistimed tracks. Implementation: the `/sub` proxy route could parse the .vtt and shift cue timestamps by `?offset=`, or the player page re-times cues via `track.mode` + cue listeners. Medium complexity.
 
-### 1.6 Custom speed presets
-User-configurable speed list (e.g. 0.5/1/1.75/3) stored in settings; the gear menu currently hardcodes [0.75, 1, 1.25, 1.5, 2].
+### ~~1.6 Custom speed presets~~ ✅
+Settings → Player defaults → "Speed presets" (comma-separated, 0.25–4×) flows through playerPrefs → sanitizePlayerPrefs → DEF.speeds; the gear menu uses it when set, falls back to [0.75,1,1.25,1.5,2].
 
 ---
 
@@ -58,8 +58,8 @@ Multi-select genre chips (fetch each genre catalog, intersect by id client-side)
 ### 3.2 ~~Failover visibility~~ — DONE
 New `Toast` component + `useToast` hook (`.app-toast`, 3s auto-dismiss); silent source switches in handlePlay/playEpisode now show "X was unreliable — switched to Y".
 
-### 3.3 Source health dashboard
-Extend the Settings reliability grid: last success timestamp, average time-to-first-stream (record play-start latency per source).
+### ~~3.3 Source health dashboard~~ ✅
+Reliability grid now shows avg time-to-first-stream per source (~Xs tooltip) — EMA recorded via recordSourceResult latency param, stamped from play start on Movie/TV pages. Last-played tooltips + per-source reset were already in.
 
 ---
 
@@ -103,8 +103,8 @@ Dark-only today? Add a light theme and/or additional accent hues (accent is alre
 ### 6.2 ~~Density switch~~ — DONE (already existed)
 Verified: "Compact card grid" toggle in Settings → Interface, persisted, applied on start.
 
-### 6.3 Global shortcuts sheet
-The `?` overlay exists in the player; add an app-level one (navigation keys, find, surprise).
+### ~~6.3 Global shortcuts sheet~~ ✅ (already existed)
+`?` toggles KeyboardShortcutsModal app-wide (App.jsx); covers Ctrl+F/K/Z/R, panic chord, and per-page keys.
 
 ### 6.4 ~~Drag-and-drop playback~~ — DONE
 Drop a video file anywhere → `openPathAtTime` pipeline (mpv → VLC → built-in player window). Uses `webUtils.getPathForFile` (new preload expose) with drop overlay hint.
