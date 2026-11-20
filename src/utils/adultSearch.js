@@ -50,6 +50,62 @@ const toKeywords = (v) =>
     .filter(Boolean)
     .join(", ");
 
+const epornerItem = (v) => ({
+  id: `eporner_${v.id}`,
+  title: v.title,
+  url: v.url,
+  embed: v.embed || null,
+  thumb: thumbSrc(v.default_thumb) || thumbSrc(v.thumbs?.[0]),
+  thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
+  duration: v.length_sec || 0,
+  durationMin: v.length_min || "",
+  rating: toRate5(v.rate),
+  views: v.views || 0,
+  site: "Eporner",
+  keywords: v.keywords || "",
+});
+
+// Pornhub webmaster API: {videos:[{video_id,title,url,embed,duration,rating,
+// ratings,views,thumb,default_thumb,thumbs,tags}]}
+const phItem = (v) => ({
+  id: `ph_${v.video_id || v.id}`,
+  title: v.title,
+  url: v.url,
+  embed: v.embed || null,
+  thumb:
+    thumbSrc(v.default_thumb) ||
+    thumbSrc(v.thumb) ||
+    thumbSrc(v.thumbs?.[0]),
+  thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
+  duration: toSeconds(v.duration),
+  rating: toRate5(v.rating),
+  views: v.views || 0,
+  site: "Pornhub",
+  keywords: toKeywords(v),
+});
+
+// RedTube ships the same video-shape family; items may be flat video objects
+// or wrapped in {video:{…}} depending on the call.
+const rtItem = (item) => {
+  const v = item.video || item;
+  return {
+    id: `rt_${v.video_id || v.id}`,
+    title: v.title,
+    url: v.url,
+    embed: v.embed || null,
+    thumb:
+      thumbSrc(v.default_thumb) ||
+      thumbSrc(v.thumb) ||
+      thumbSrc(v.thumbs?.[0]),
+    thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
+    duration: toSeconds(v.duration),
+    rating: toRate5(v.rating),
+    views: v.views || 0,
+    site: "RedTube",
+    keywords: toKeywords(v),
+  };
+};
+
 export const SEARCH_SOURCES = [
   {
     id: "eporner",
@@ -60,20 +116,19 @@ export const SEARCH_SOURCES = [
           `${EPORNER_API}?query=${encodeURIComponent(q)}&per_page=30` +
           `&page=${page}&thumbsize=big&order=latest`;
         const data = await (await fetch(u)).json();
-        return (data?.videos || []).map((v) => ({
-          id: `eporner_${v.id}`,
-          title: v.title,
-          url: v.url,
-          embed: v.embed || null,
-          thumb: thumbSrc(v.default_thumb) || thumbSrc(v.thumbs?.[0]),
-          thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
-          duration: v.length_sec || 0,
-          durationMin: v.length_min || "",
-          rating: toRate5(v.rate),
-          views: v.views || 0,
-          site: "Eporner",
-          keywords: v.keywords || "",
-        }));
+        return (data?.videos || []).map(epornerItem);
+      } catch {
+        return [];
+      }
+    },
+    // "popular" = most viewed, "top-rated" = highest rated (all-time)
+    async browse(order, page) {
+      try {
+        const u =
+          `${EPORNER_API}?query=all&per_page=30&page=${page}` +
+          `&thumbsize=big&order=${order === "top-rated" ? "top-rated" : "popular"}`;
+        const data = await (await fetch(u)).json();
+        return (data?.videos || []).map(epornerItem);
       } catch {
         return [];
       }
@@ -84,28 +139,24 @@ export const SEARCH_SOURCES = [
     label: "Pornhub",
     async search(q, page) {
       try {
-        // Public webmaster JSON API: {videos:[{video_id,title,url,embed,
-        // duration,rating,ratings,views,thumb,default_thumb,thumbs,tags}]}
         const u =
           `https://www.pornhub.com/webmasters/search` +
           `?search=${encodeURIComponent(q)}&page=${page}&thumbsize=big`;
         const data = await (await fetch(u)).json();
-        return (data?.videos || []).map((v) => ({
-          id: `ph_${v.video_id || v.id}`,
-          title: v.title,
-          url: v.url,
-          embed: v.embed || null,
-          thumb:
-            thumbSrc(v.default_thumb) ||
-            thumbSrc(v.thumb) ||
-            thumbSrc(v.thumbs?.[0]),
-          thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
-          duration: toSeconds(v.duration),
-          rating: toRate5(v.rating),
-          views: v.views || 0,
-          site: "Pornhub",
-          keywords: toKeywords(v),
-        }));
+        return (data?.videos || []).map(phItem);
+      } catch {
+        return [];
+      }
+    },
+    // Empty query + ordering works — the API lists its whole catalog
+    async browse(order, page) {
+      try {
+        const o = order === "top-rated" ? "rating" : "mostviewed";
+        const u =
+          `https://www.pornhub.com/webmasters/search` +
+          `?ordering=${o}&page=${page}&thumbsize=big`;
+        const data = await (await fetch(u)).json();
+        return (data?.videos || []).map(phItem);
       } catch {
         return [];
       }
@@ -116,30 +167,25 @@ export const SEARCH_SOURCES = [
     label: "RedTube",
     async search(q, page) {
       try {
-        // Same video-shape family as the Pornhub webmaster API; items may be
-        // flat video objects or wrapped in {video:{…}} depending on the call.
         const u =
           `https://api.redtube.com/?data=redtube.Videos.searchVideos` +
           `&output=json&search=${encodeURIComponent(q)}` +
           `&page=${page}&thumbsize=big`;
         const data = await (await fetch(u)).json();
-        const vids = (data?.videos || []).map((item) => item.video || item);
-        return vids.map((v) => ({
-          id: `rt_${v.video_id || v.id}`,
-          title: v.title,
-          url: v.url,
-          embed: v.embed || null,
-          thumb:
-            thumbSrc(v.default_thumb) ||
-            thumbSrc(v.thumb) ||
-            thumbSrc(v.thumbs?.[0]),
-          thumbs: (v.thumbs || []).map(thumbSrc).filter(Boolean),
-          duration: toSeconds(v.duration),
-          rating: toRate5(v.rating),
-          views: v.views || 0,
-          site: "RedTube",
-          keywords: toKeywords(v),
-        }));
+        return (data?.videos || []).map(rtItem);
+      } catch {
+        return [];
+      }
+    },
+    async browse(order, page) {
+      try {
+        const o = order === "top-rated" ? "rating" : "mostviewed";
+        const u =
+          `https://api.redtube.com/?data=redtube.Videos.searchVideos` +
+          `&output=json&ordering=${o}` +
+          `&page=${page}&thumbsize=big`;
+        const data = await (await fetch(u)).json();
+        return (data?.videos || []).map(rtItem);
       } catch {
         return [];
       }
@@ -147,14 +193,10 @@ export const SEARCH_SOURCES = [
   },
 ];
 
-// Fire every adapter in parallel and merge one page of results. Buckets are
-// interleaved round-robin so one prolific site can't crowd out the rest, and
-// deduped on normalized URL — mirror sites occasionally index the same video.
-export async function searchAllSites(query, page = 1) {
-  const settled = await Promise.allSettled(
-    SEARCH_SOURCES.map((s) => s.search(query, page)),
-  );
-  const buckets = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
+// Interleave site buckets round-robin so one prolific site can't crowd out
+// the rest, and dedupe on normalized URL — mirror sites occasionally index
+// the same video.
+function mergeBuckets(buckets) {
   const seen = new Set();
   const out = [];
   let added = true;
@@ -173,4 +215,24 @@ export async function searchAllSites(query, page = 1) {
     }
   }
   return out;
+}
+
+// Fire every adapter in parallel and merge one page of results.
+export async function searchAllSites(query, page = 1) {
+  const settled = await Promise.allSettled(
+    SEARCH_SOURCES.map((s) => s.search(query, page)),
+  );
+  const buckets = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
+  return mergeBuckets(buckets);
+}
+
+// Same merge for catalog "top" feeds — the adult Home rows pull Trending
+// ("popular") and Top Rated ("top-rated") from every site that has a browse
+// endpoint, so the rows aren't Eporner-only.
+export async function browseAllSites(order = "popular", page = 1) {
+  const settled = await Promise.allSettled(
+    SEARCH_SOURCES.map((s) => s.browse?.(order, page) ?? []),
+  );
+  const buckets = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
+  return mergeBuckets(buckets);
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { storage, hashPin } from "../utils/storage";
 import { sortSubsByPref } from "../utils/subtitles";
 import { playerDefaults } from "../utils/playerPrefs";
-import { searchAllSites } from "../utils/adultSearch";
+import { searchAllSites, browseAllSites } from "../utils/adultSearch";
 import { WarningIcon } from "../components/Icons";
 import ScrollRow from "../components/ScrollRow";
 
@@ -579,14 +579,18 @@ export default function AdultPage() {
   useEffect(() => {
     if (mode !== "home") return;
     let dead = false;
-    const g = gay ? "&gay=1" : "";
+    // Merged across every site adapter (Eporner + Pornhub + RedTube).
+    // The gay filter only exists on the Eporner API — gay mode stays
+    // Eporner-sourced so the filter is real, not a keyword guess.
     const get = (order) =>
-      fetch(
-        `${API}?query=all&per_page=24&page=1&thumbsize=big&order=${order}${g}`,
-      )
-        .then((r) => r.json())
-        .then((d) => (Array.isArray(d?.videos) ? d.videos : []))
-        .catch(() => []);
+      gay
+        ? fetch(
+            `${API}?query=all&per_page=24&page=1&thumbsize=big&order=${order}&gay=1`,
+          )
+            .then((r) => r.json())
+            .then((d) => (Array.isArray(d?.videos) ? d.videos : []))
+            .catch(() => [])
+        : browseAllSites(order).then((items) => items.map(toCardV));
     Promise.all([get("popular"), get("top-rated")]).then(([tr, tp]) => {
       if (!dead) setHomeData({ trending: tr, top: tp });
     });
