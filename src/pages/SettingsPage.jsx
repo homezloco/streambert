@@ -3414,6 +3414,75 @@ function NetworkSection() {
         />
       </div>
 
+      <div className="settings-section-title">Adult section proxy</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: "var(--text3)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}
+      >
+        Route the 18+ site tabs through a different route than the rest of the
+        app — e.g. Tor's SOCKS5 at 127.0.0.1:9050 while streams stay on your
+        normal connection. Each adult site already gets its own isolated
+        session; this controls what network those sessions use.
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        <select
+          className="apikey-input"
+          style={{ width: 170, marginBottom: 0 }}
+          value={cfg.adultProxyMode}
+          onChange={(e) => set("adultProxyMode", e.target.value)}
+        >
+          <option value="main">Same as app</option>
+          <option value="off">Direct (no proxy)</option>
+          <option value="socks5">SOCKS5</option>
+          <option value="http">HTTP</option>
+        </select>
+        <input
+          className="apikey-input"
+          style={{ flex: 1, minWidth: 140, marginBottom: 0 }}
+          placeholder="host (e.g. 127.0.0.1)"
+          disabled={
+            cfg.adultProxyMode !== "socks5" && cfg.adultProxyMode !== "http"
+          }
+          value={cfg.adultProxyHost}
+          onChange={(e) => set("adultProxyHost", e.target.value)}
+        />
+        <input
+          className="apikey-input"
+          style={{ width: 90, marginBottom: 0 }}
+          placeholder="port"
+          disabled={
+            cfg.adultProxyMode !== "socks5" && cfg.adultProxyMode !== "http"
+          }
+          value={cfg.adultProxyPort}
+          onChange={(e) => set("adultProxyPort", e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <label style={rowLabel}>Adult bypass list (optional)</label>
+        <input
+          className="apikey-input"
+          style={{ flex: 1, minWidth: 260, marginBottom: 0, width: "100%" }}
+          placeholder="localhost, *.internal.lan"
+          disabled={
+            cfg.adultProxyMode !== "socks5" && cfg.adultProxyMode !== "http"
+          }
+          value={cfg.adultProxyBypass}
+          onChange={(e) => set("adultProxyBypass", e.target.value)}
+        />
+      </div>
+
       <div className="settings-section-title">Secure DNS (DoH)</div>
       <div
         style={{

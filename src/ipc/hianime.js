@@ -605,6 +605,8 @@ video::cue{font-size:var(--cuesz,1.15em)}
 #pip{position:absolute;right:16px;bottom:106px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;opacity:.85}
 #tv{position:absolute;right:16px;bottom:148px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;opacity:.85}
 #gear:hover,#pip:hover,#tv:hover{opacity:1}
+#skip{position:absolute;left:16px;bottom:64px;z-index:10;background:rgba(20,20,20,.75);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;opacity:.85;display:none}
+#skip:hover{opacity:1}
 #tvpanel{position:absolute;inset:0;z-index:35;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
 #tvpanel[hidden]{display:none}
 #tvpanel iframe{width:380px;height:500px;max-width:92vw;max-height:88vh;border:0;border-radius:10px;background:#fff}
@@ -633,13 +635,14 @@ video::cue{font-size:var(--cuesz,1.15em)}
 <button id="gear" title="Quality & speed">&#9881;</button>
 <button id="pip" title="Picture in picture">&#9719;</button>
 <button id="tv" title="Play on TV">&#128250;</button>
+<button id="skip" title="Skip ahead 85s (S)">Skip 85s &raquo;</button>
 <div id="tvpanel" hidden><iframe id="tvf" title="Play on TV"></iframe></div>
 <div id="toast" style="display:none;position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:40;background:rgba(15,15,15,.9);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 14px;font:13px system-ui,sans-serif;color:#eee"></div>
 <div id="help" hidden><b>Shortcuts</b>
 <span>&larr;/&rarr;</span> or <span>J</span>/<span>L</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
 <span>K</span> play/pause &nbsp;<span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
 <span>P</span> picture-in-picture &nbsp;<span>,</span>/<span>.</span> frame step<br>
-<span>?</span> this help</div>
+<span>S</span> skip +85s &nbsp;<span>?</span> this help</div>
 <div id="menu" hidden>
   <div class="sec" id="qsec">Quality</div>
   <div id="levels"></div>
@@ -696,11 +699,18 @@ video::cue{font-size:var(--cuesz,1.15em)}
       case 'j':case 'J':video.currentTime=Math.max(0,video.currentTime-10);break;
       case 'l':case 'L':video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10);break;
       case 'k':case 'K':video.paused?video.play():video.pause();break;
+      case 's':case 'S':skipIntro();break;
       case ',':video.pause();video.currentTime=Math.max(0,video.currentTime-1/30);break;
       case '.':video.pause();video.currentTime=Math.min(video.duration||Infinity,video.currentTime+1/30);break;
       case 'p':case 'P':togglePip();break;
     }
   });
+  // Skip-intro: +85s button shown during the opening stretch of the video
+  // (where intros live), plus the S shortcut any time.
+  const skipBtn=document.getElementById('skip');
+  const skipIntro=()=>{video.currentTime=Math.min(video.duration||Infinity,video.currentTime+85);};
+  skipBtn.onclick=skipIntro;
+  video.addEventListener('timeupdate',()=>{skipBtn.style.display=(video.currentTime<900)?'block':'none';});
   // Click toggles play/pause (250ms delay so dblclick→fullscreen wins);
   // dblclick = fullscreen
   let clickT=null;

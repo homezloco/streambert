@@ -13,8 +13,8 @@ Shipped: server binds 0.0.0.0, LAN-aware Host check (private ranges + hostname +
 ### 1.2 Chromecast sender **[big]**
 Proper Google Cast support. Electron lacks `chrome.cast`; needs a custom Cast-protocol implementation or a companion web app hosted on the LAN server (which 1.1 effectively is). Only worth doing after 1.1 proves the TV-browser path isn't enough.
 
-### 1.3 Skip intro / silence detection
-AniSkip already covers anime. For general content: analyze audio for silence/theme-song regions client-side, or crowd-sourced markers where available. Hard to get right; low priority.
+### 1.3 Skip intro / silence detection — partial ✅
+Shipped: "Skip 85s »" button + `S` key in the local player (button shows during the first 15 min where intros live). True silence detection / crowd-sourced markers still open; AniSkip covers anime.
 
 ### 1.4 Watch-party / LAN playhead sync
 Share position + play/pause between two Streambert instances (or one instance + TV browser from 1.1) over LAN. Broadcast position via WebSocket on the player server.
@@ -84,8 +84,8 @@ JSON export of history + progress + saved list (backup module exists — check i
 ### ~~5.1 Per-site session isolation~~ ✅
 Adult browsing webviews now use `persist:adult_<siteId>` partitions — cookies/storage can't be correlated across sites. Each partition lazily gets the same hardening as `persist:player` (header stripping, ad/tracker blocking, m3u8/mp4/vtt capture, download blocking) via `configureGuestSession`, and "clear site data" wipes all `adult_*` partitions too.
 
-### 5.2 Tor/proxy per-section routing
-Route adult-section traffic through a different proxy than regular. Electron `session.setProxy` is per-session, so this composes with 5.1.
+### ~~5.2 Tor/proxy per-section routing~~ ✅
+Settings → Privacy & Network → "Adult section proxy": Same-as-app / Direct / SOCKS5 / HTTP with its own bypass list. Each `persist:adult_*` partition gets it via `applyAdultSessionProxy` at configure time and on settings save (`applyNetwork` enumerates adult partitions). Point it at Tor's 127.0.0.1:9050 for adult-only Tor routing.
 
 ### ~~5.3 Panic button~~ — DONE
 Global hotkey (e.g. Ctrl+Shift+X) → instantly hide window + mute. Electron `globalShortcut`.
@@ -97,8 +97,8 @@ Extend the adult-section PIN gate (hashPin already in storage.js) to a launch ga
 
 ## 6. UX polish
 
-### 6.1 Themes
-Dark-only today? Add a light theme and/or additional accent hues (accent is already a CSS var `--red`).
+### ~~6.1 Themes~~ ✅ (already existed)
+appearance.js has theme presets including a light theme plus a custom-vars editor, and accent color is configurable — all under Settings → Interface.
 
 ### 6.2 ~~Density switch~~ — DONE (already existed)
 Verified: "Compact card grid" toggle in Settings → Interface, persisted, applied on start.

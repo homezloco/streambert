@@ -714,6 +714,7 @@ function configureAdultSessionIfNeeded(sess) {
     return;
   configuredAdultSessions.add(part);
   configureGuestSession(sess, { captureMedia: true });
+  networkIpc.applyAdultSessionProxy(sess);
 }
 
 function createWindow() {

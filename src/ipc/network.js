@@ -16,6 +16,14 @@ const DEFAULTS = {
   dohMode: "off", // off | cloudflare | google | quad9 | custom
   dohCustom: "", // DoH template URL for custom mode
   webrtcProtect: true, // force default-route-only WebRTC candidate gathering
+  // Per-section proxy for the adult site partitions (persist:adult_*).
+  // "main" inherits the global proxy settings above; "off" is a direct
+  // connection even when the global proxy is on; socks5/http use their own
+  // host/port/bypass.
+  adultProxyMode: "main", // main | off | socks5 | http
+  adultProxyHost: "",
+  adultProxyPort: "",
+  adultProxyBypass: "",
 };
 
 const DOH_SERVERS = {
@@ -57,6 +65,40 @@ function proxyConfig(s) {
   return cfg;
 }
 
+// Proxy for adult site partitions: "main" inherits the global config,
+// "off" forces a direct connection, socks5/http use the adult_* fields.
+function adultProxyConfig(s) {
+  if (s.adultProxyMode === "main") return proxyConfig(s);
+  if (s.adultProxyMode === "off") return { mode: "direct" };
+  return proxyConfig({
+    proxyMode: s.adultProxyMode,
+    proxyHost: s.adultProxyHost,
+    proxyPort: s.adultProxyPort,
+    proxyBypass: s.adultProxyBypass,
+  });
+}
+
+// Apply the adult-section proxy to a single session (called when each
+// persist:adult_* partition is lazily configured).
+async function applyAdultSessionProxy(ses) {
+  try {
+    await ses.setProxy(adultProxyConfig(getSettings()));
+  } catch {}
+}
+
+// Partitions persist under userData/Partitions/<name> — enumerate the adult
+// ones so settings changes reach sessions created earlier.
+function adultPartitions() {
+  try {
+    const dir = path.join(app.getPath("userData"), "Partitions");
+    return fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((d) => d.startsWith("adult_"))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 // Apply proxy + DoH to every session the app uses (default session covers the
 // main window; player/trailer partitions cover webviews and the pop-out).
 // Safe to call any time — takes effect for subsequent requests.
@@ -71,6 +113,13 @@ async function applyNetwork() {
   for (const ses of sessions) {
     try {
       await ses.setProxy(cfg);
+    } catch {}
+  }
+  // Per-site adult partitions route through their own proxy setting.
+  const adultCfg = adultProxyConfig(s);
+  for (const name of adultPartitions()) {
+    try {
+      await session.fromPartition(`persist:${name}`).setProxy(adultCfg);
     } catch {}
   }
   try {
@@ -122,6 +171,18 @@ function sanitize(raw = {}) {
     : "off";
   s.dohCustom = asStr(raw.dohCustom, 512);
   s.webrtcProtect = raw.webrtcProtect !== false;
+  s.adultProxyMode = ["main", "off", "socks5", "http"].includes(
+    raw.adultProxyMode,
+  )
+    ? raw.adultProxyMode
+    : "main";
+  s.adultProxyHost = asStr(raw.adultProxyHost, 253);
+  s.adultProxyPort = String(parseInt(raw.adultProxyPort, 10) || "").slice(0, 5);
+  s.adultProxyBypass = asStr(raw.adultProxyBypass, 512)
+    .split(",")
+    .map((h) => h.trim())
+    .filter((h) => HOST_RE.test(h) || HOST_PORT_RE.test(h) || SCHEME_HOST_PORT_RE.test(h) || h === "<local>" || h.startsWith("*."))
+    .join(",");
   return s;
 }
 
@@ -139,4 +200,10 @@ function register() {
   });
 }
 
-module.exports = { register, applyNetwork, applyWebRtcFlag, getSettings };
+module.exports = {
+  register,
+  applyNetwork,
+  applyWebRtcFlag,
+  applyAdultSessionProxy,
+  getSettings,
+};
