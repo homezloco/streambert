@@ -11,9 +11,12 @@
 //
 // Files land under userData/widevine/<ver>/ (manifest.json +
 // _platform_specific/<plat>/lib*) and are also mirrored beside the Electron
-// binary as WidevineCdm/ when writable — on Linux the zygote can preload the
-// library before app JS runs, so that location is the reliable one. The
-// --widevine-cdm-path/version switches are registered too, as a fallback.
+// binary as WidevineCdm/ — the bundled dir is what actually gets the CDM
+// loaded: Electron 46+ auto-detects <exe dir>/WidevineCdm at zygote time,
+// which happens before app JS runs, so appendSwitch is too late on Linux.
+// Electron 45 and older lack CDM loading entirely (the support landed with
+// electron/electron#50046). Verified: EME requestMediaKeySystemAccess
+// accepts com.widevine.alpha on 46.0.0-alpha.12 with the flat layout.
 
 const { app, session, net, ipcMain } = require("electron");
 const path = require("path");
@@ -87,25 +90,52 @@ function installedDir() {
 const distCdmDir = () =>
   path.join(path.dirname(process.execPath), "WidevineCdm");
 
+// What the launcher will actually load: the bundled dir beside the binary.
+function bundledDir() {
+  const dd = distCdmDir();
+  try {
+    if (fs.existsSync(manifestPath(dd)) && fs.existsSync(libPath(dd)))
+      return dd;
+  } catch {}
+  return null;
+}
+
 let loadedAtLaunch = false;
 
 function status() {
   const dir = installedDir();
+  const bdir = bundledDir();
   const m = dir && readManifestJson(dir);
+  const bm = bdir && readManifestJson(bdir);
   return {
-    installed: !!dir,
-    version: m?.version || (dir ? path.basename(dir) : null),
+    installed: !!dir || !!bdir,
+    version: m?.version || bm?.version || (dir ? path.basename(dir) : null),
+    bundled: !!bdir,
+    bundledVersion: bm?.version || null,
     loadedAtLaunch,
     path: dir,
     supported: !!PLAT_KEY(),
   };
 }
 
-// Must run before app ready (same constraint as applyWebRtcFlag).
+// On Linux the zygote preloads the bundled WidevineCdm dir before app JS, so
+// this mostly records whether a loadable CDM was present at startup. If the
+// userData copy exists but the bundled mirror was wiped (node_modules
+// reinstalls), it gets re-mirrored here so the NEXT launch loads it.
 function applyWidevineFlag() {
-  const dir = installedDir();
+  const wasBundled = !!bundledDir();
+  if (!wasBundled) {
+    const udir = installedDir();
+    if (udir) {
+      try {
+        fs.cpSync(udir, distCdmDir(), { recursive: true });
+      } catch {}
+    }
+  }
+  const dir = bundledDir() || installedDir();
   if (!dir) return;
-  loadedAtLaunch = true;
+  // On Linux the CDM only loads when the bundled dir existed at zygote time.
+  loadedAtLaunch = wasBundled || process.platform !== "linux";
   try {
     app.commandLine.appendSwitch("widevine-cdm-path", dir);
     const v = readManifestJson(dir)?.version || path.basename(dir);

@@ -3021,8 +3021,9 @@ function WidevineSection() {
       >
         DRM services on the Services page (Netflix, Paramount+, Crave, Disney+…)
         need Google's Widevine Content Decryption Module. Electron can't ship
-        it, so Streambert downloads the official CDM zip on demand (~3 MB) —
-        the same component Chromium itself fetches.
+        it, so Streambert downloads the official CDM component on demand
+        (~22 MB, hash-verified) — the same one Chromium fetches. Playback is
+        L3 (standard quality); services that demand VMP signing may refuse.
       </div>
       <label style={rowLabel}>Status</label>
       <div
