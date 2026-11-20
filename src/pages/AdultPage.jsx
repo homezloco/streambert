@@ -1236,7 +1236,10 @@ export default function AdultPage() {
           <button
             className={`browse-tab${mode === "channels" ? " browse-tab--active" : ""}`}
             title="Top channels across the major sites"
-            onClick={() => setMode("channels")}
+            onClick={() => {
+              setMode("channels");
+              setChannelView(null);
+            }}
           >
             Channels
           </button>
