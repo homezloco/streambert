@@ -272,6 +272,11 @@ function AdultCard({ v, onPlay, seen }) {
         {v.title}
       </div>
       <div className="adult-card__meta">
+        {v.resumeAt && (
+          <span style={{ color: "var(--red)", marginRight: 5 }}>
+            ▶ {v.resumeAt}
+          </span>
+        )}
         {v.site && (
           <span
             style={{
@@ -362,6 +367,7 @@ export default function AdultPage() {
           url: v.url,
           kw: v.keywords || "",
           site: v.site || "",
+          thumb: v.default_thumb?.src || v.thumbs?.[0]?.src || "",
         },
         ...recents.filter(
           (r) => r.id !== v.id && (!v.url || r.url !== v.url),
@@ -567,6 +573,51 @@ export default function AdultPage() {
     // Only when the watched set actually changes, not on filter tweaks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, recents]);
+
+  // ── Home tab: Continue Watching / Watch Again / Trending / Top Rated ──
+  const [homeData, setHomeData] = useState({ trending: [], top: [] });
+  useEffect(() => {
+    if (mode !== "home") return;
+    let dead = false;
+    const g = gay ? "&gay=1" : "";
+    const get = (order) =>
+      fetch(
+        `${API}?query=all&per_page=24&page=1&thumbsize=big&order=${order}${g}`,
+      )
+        .then((r) => r.json())
+        .then((d) => (Array.isArray(d?.videos) ? d.videos : []))
+        .catch(() => []);
+    Promise.all([get("popular"), get("top-rated")]).then(([tr, tp]) => {
+      if (!dead) setHomeData({ trending: tr, top: tp });
+    });
+    return () => {
+      dead = true;
+    };
+  }, [mode, gay]);
+
+  // Resume points saved by the native-swap tracker (adultResume_v_<id>)
+  const homeResumeSecs = (id) => storage.get(`adultResume_v_${id}`) || 0;
+  // Recents → the AdultCard shape (recents now store a thumb; older entries
+  // may not — the card just shows a title card then)
+  const recentToCard = (r) => ({
+    id: r.id,
+    title: r.title,
+    url: r.url,
+    embed: r.embed,
+    site: r.site,
+    resumeAt: fmtDur(homeResumeSecs(r.id)),
+    default_thumb: r.thumb ? { src: r.thumb } : null,
+    thumbs: r.thumb ? [{ src: r.thumb }] : [],
+    rate: 0,
+    views: 0,
+  });
+  const homeContinue = recents
+    .filter((r) => homeResumeSecs(r.id) > 0)
+    .map(recentToCard);
+  const homeAgain = recents
+    .filter((r) => !homeResumeSecs(r.id))
+    .slice(0, 12)
+    .map(recentToCard);
 
   // ── Downloading: reuse the movie downloader once a stream URL is captured ──
   const [streamUrl, setStreamUrl] = useState(null); // captured .m3u8
@@ -1010,6 +1061,12 @@ export default function AdultPage() {
         </div>
         <div className="browse-tabs">
           <button
+            className={`browse-tab${mode === "home" ? " browse-tab--active" : ""}`}
+            onClick={() => setMode("home")}
+          >
+            Home
+          </button>
+          <button
             className={`browse-tab${mode === "browse" && !searchAll ? " browse-tab--active" : ""}`}
             onClick={() => {
               setMode("browse");
@@ -1047,7 +1104,7 @@ export default function AdultPage() {
             Creators
           </button>
         </div>
-        {mode !== "browse" && (
+        {mode !== "browse" && mode !== "home" && (
           <div className="webview-nav">
             <button
               className="browse-tab"
@@ -1275,7 +1332,90 @@ export default function AdultPage() {
         )}
       </div>
 
-      {mode !== "browse" ? (
+      {mode === "home" ? (
+        <div className="adult-browse">
+          {homeContinue.length > 0 && (
+            <div className="adult-reco">
+              <div className="section-title" style={{ fontSize: 14 }}>
+                Continue Watching
+              </div>
+              <ScrollRow>
+                {homeContinue.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            </div>
+          )}
+          {homeAgain.length > 0 && (
+            <div className="adult-reco">
+              <div className="section-title" style={{ fontSize: 14 }}>
+                Watch Again
+              </div>
+              <ScrollRow>
+                {homeAgain.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            </div>
+          )}
+          <div className="adult-reco">
+            <div className="section-title" style={{ fontSize: 14 }}>
+              Trending
+            </div>
+            {homeData.trending.length ? (
+              <ScrollRow>
+                {homeData.trending.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen={recents.some(
+                      (r) => r.id === v.id || (v.url && r.url === v.url),
+                    )}
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            ) : (
+              <div className="loader">
+                <div className="spinner" />
+              </div>
+            )}
+          </div>
+          <div className="adult-reco">
+            <div className="section-title" style={{ fontSize: 14 }}>
+              Top Rated
+            </div>
+            {homeData.top.length ? (
+              <ScrollRow>
+                {homeData.top.map((v) => (
+                  <AdultCard
+                    key={v.id}
+                    v={v}
+                    seen={recents.some(
+                      (r) => r.id === v.id || (v.url && r.url === v.url),
+                    )}
+                    onPlay={() => setPlaying(v)}
+                  />
+                ))}
+              </ScrollRow>
+            ) : (
+              <div className="loader">
+                <div className="spinner" />
+              </div>
+            )}
+          </div>
+        </div>
+      ) : mode !== "browse" ? (
         <webview
           ref={webviewRef}
           key={`${mode}-${current.id}`}

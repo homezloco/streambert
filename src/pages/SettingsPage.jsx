@@ -2907,6 +2907,7 @@ function PlayerDefaultsSection() {
 // Option ids mirror the ORDERS / DURS / RATINGS / grid-size lists in
 // AdultPage.jsx so defaults picked here line up exactly with its filters.
 const ADULT_MODE_OPTIONS = [
+  { value: "home", label: "Home (rows)" },
   { value: "browse", label: "Browse (video catalog)" },
   { value: "sites", label: "Sites" },
   { value: "images", label: "Images" },
