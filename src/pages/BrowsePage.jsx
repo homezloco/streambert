@@ -4,6 +4,7 @@ import { storage } from "../utils/storage";
 import { tmdbFetch, MOVIE_GENRES, TV_GENRES } from "../utils/api";
 import { useRatings, getRatingForItem } from "../utils/useRatings";
 import { isRestricted } from "../utils/ageRating";
+import { useStudios } from "../utils/studios";
 
 const SORTS = [
   { id: "popularity.desc", label: "Most Popular" },
@@ -51,6 +52,14 @@ export default function BrowsePage({
   const setDecade = (v) => {
     storage.set("browseDecade", v);
     _setDecade(v);
+  };
+  // Studio/network filter — companies resolved per title via Wikidata
+  const [studio, _setStudio] = useState(
+    initial?.studio || storage.get("browseStudio") || "",
+  );
+  const setStudio = (v) => {
+    storage.set("browseStudio", v);
+    _setStudio(v);
   };
   // "Hide watched" — persisted so it survives page switches
   const [hideWatched, _setHideWatched] = useState(
@@ -152,6 +161,19 @@ export default function BrowsePage({
   }, [type, sort, genre, query, pageNum, apiKey]);
 
   const { ratingsMap, ageLimitSetting } = useRatings(items);
+  const studioMap = useStudios(items);
+
+  // Companies present across loaded items, most common first
+  const studioOptions = useMemo(() => {
+    const counts = new Map();
+    for (const i of items) {
+      for (const name of studioMap[i.id] || [])
+        counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 60);
+  }, [items, studioMap]);
 
   const getRating = useCallback(
     (item) => getRatingForItem(item, ratingsMap),
@@ -194,9 +216,11 @@ export default function BrowsePage({
           watched?.[`${i.media_type || type}_${i.id}`]
         )
           return false;
+        if (studio && !(studioMap[i.id] || []).includes(studio))
+          return false;
         return true;
       }),
-    [items, decadeRange, hideWatched, watched, type],
+    [items, decadeRange, hideWatched, watched, type, studio, studioMap],
   );
 
   const enrichedRatingsMap = useMemo(() => {
@@ -263,6 +287,21 @@ export default function BrowsePage({
               </option>
             ))}
           </select>
+          {studioOptions.length > 0 && (
+            <select
+              className="browse-sort"
+              value={studio}
+              onChange={(e) => setStudio(e.target.value)}
+              title="Filter by production company / network (via Wikidata)"
+            >
+              <option value="">Any studio</option>
+              {studioOptions.map(([name, n]) => (
+                <option key={name} value={name}>
+                  {name} ({n})
+                </option>
+              ))}
+            </select>
+          )}
           <button
             className="browse-chip"
             title="Open a random title from what's loaded"

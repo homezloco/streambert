@@ -80,6 +80,7 @@ import {
 } from "../utils/playerGamepadScript";
 import { useSourceId } from "../utils/useSourceId";
 import { sortSubsByPref } from "../utils/subtitles";
+import { fetchStudioMap } from "../utils/studios";
 import { playerDefaults } from "../utils/playerPrefs";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
@@ -103,8 +104,10 @@ export default function MoviePage({
   downloads,
   onGoToDownloads,
   onSelect,
+  onBrowse,
 }) {
   const [details, setDetails] = useState(null);
+  const [studios, setStudios] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
   const [trailerKey, setTrailerKey] = useState(null);
@@ -310,6 +313,22 @@ export default function MoviePage({
       mounted = false;
     };
   }, [item.id, apiKey]);
+
+  // Production companies via Wikidata (keyless: item.id is the IMDb id;
+  // TMDB mode uses details.imdb_id)
+  useEffect(() => {
+    const imdbId = /^tt/.test(String(item.id))
+      ? String(item.id)
+      : details?.imdb_id;
+    if (!imdbId) return;
+    let mounted = true;
+    fetchStudioMap([imdbId]).then((m) => {
+      if (mounted) setStudios(m.get(imdbId) || []);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [item.id, details?.imdb_id]);
 
   useEffect(() => {
     let mounted = true;
@@ -1106,6 +1125,16 @@ export default function MoviePage({
               {displayGenres.map((g) => (
                 <span key={g.id} className="genre-tag">
                   {g.name}
+                </span>
+              ))}
+              {studios.map((s) => (
+                <span
+                  key={s}
+                  className="genre-tag genre-tag--link"
+                  title={`Browse movies by ${s}`}
+                  onClick={() => onBrowse?.({ type: "movie", studio: s })}
+                >
+                  {s}
                 </span>
               ))}
             </div>

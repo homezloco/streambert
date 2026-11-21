@@ -90,6 +90,7 @@ import {
 } from "../utils/playerGamepadScript";
 import { useSourceId } from "../utils/useSourceId";
 import { sortSubsByPref } from "../utils/subtitles";
+import { fetchStudioMap } from "../utils/studios";
 import { playerDefaults } from "../utils/playerPrefs";
 import { setPlayerGamepadActive } from "../utils/gamepadPlayerState";
 import HiAnimeLoader from "../components/HiAnimeLoader";
@@ -437,8 +438,10 @@ export default function TVPage({
   onGoToDownloads,
   onEpisodeChange,
   onSelect,
+  onBrowse,
 }) {
   const [details, setDetails] = useState(null);
+  const [studios, setStudios] = useState([]);
   const [similar, setSimilar] = useState(null); // More-like-this row
   const [ovFull, setOvFull] = useState(false); // expand long overview
   const [seasonData, setSeasonData] = useState(null);
@@ -669,6 +672,21 @@ export default function TVPage({
       mounted = false;
     };
   }, [item.id, apiKey]);
+
+  // Networks/production companies via Wikidata (keyless: item.id is IMDb id)
+  useEffect(() => {
+    const imdbId = /^tt/.test(String(item.id))
+      ? String(item.id)
+      : details?.imdb_id || item.imdb_id;
+    if (!imdbId) return;
+    let mounted = true;
+    fetchStudioMap([imdbId]).then((m) => {
+      if (mounted) setStudios(m.get(imdbId) || []);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [item.id, details?.imdb_id]);
 
   // ── Fetch episode group mapping if this show has one ─────────────────────
   useEffect(() => {
@@ -2064,6 +2082,16 @@ export default function TVPage({
                   {displayGenres.map((g) => (
                     <span key={g.id} className="genre-tag">
                       {g.name}
+                    </span>
+                  ))}
+                  {studios.map((s) => (
+                    <span
+                      key={s}
+                      className="genre-tag genre-tag--link"
+                      title={`Browse series by ${s}`}
+                      onClick={() => onBrowse?.({ type: "tv", studio: s })}
+                    >
+                      {s}
                     </span>
                   ))}
                 </div>

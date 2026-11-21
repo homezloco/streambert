@@ -1274,6 +1274,7 @@ export default function App() {
                 downloads={downloads}
                 onGoToDownloads={handleGoToDownloads}
                 onSelect={handleSelectResult}
+                onBrowse={(params) => navigate("browse", params)}
               />
             )}
             {page === "tv" && selected && (
@@ -1298,6 +1299,7 @@ export default function App() {
                 onGoToDownloads={handleGoToDownloads}
                 onEpisodeChange={setWatchingEpisode}
                 onSelect={handleSelectResult}
+                onBrowse={(params) => navigate("browse", params)}
               />
             )}
             {page === "history" && (

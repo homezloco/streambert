@@ -1576,6 +1576,14 @@ select:focus-visible {
     border: 1px solid var(--border);
     color: var(--text2);
 }
+.genre-tag--link {
+    cursor: pointer;
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    color: var(--accent);
+}
+.genre-tag--link:hover {
+    background: color-mix(in srgb, var(--accent) 15%, var(--surface3));
+}
 
 /* ── Player ──────────────────────────────────────────────────────────────── */
 .player-wrap {
