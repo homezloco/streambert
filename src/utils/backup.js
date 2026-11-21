@@ -60,6 +60,7 @@ export const BACKUP_KEYS = [
   "browseHideWatched",
   "browseStudio",
   "browseStudioName",
+  "browseStudioRecent",
   // Studio/network resolution caches (Wikidata)
   "studioCache",
   "studioCatCache",

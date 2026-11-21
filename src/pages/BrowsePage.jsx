@@ -20,6 +20,31 @@ const SORTS = [
 const itemYear = (i) =>
   parseInt((i.release_date || i.first_air_date || "").slice(0, 4)) || 0;
 
+// Always-on studio entries so the dropdown is useful before you scroll —
+// merged with companies discovered on the loaded page (deduped by key).
+const PRESET_STUDIOS = [
+  "Netflix",
+  "HBO",
+  "A24",
+  "Marvel Studios",
+  "Pixar",
+  "Studio Ghibli",
+  "Warner Bros.",
+  "Universal Pictures",
+  "Paramount Pictures",
+  "Sony Pictures",
+  "Walt Disney Pictures",
+  "Lucasfilm",
+  "BBC",
+  "AMC",
+  "FX",
+  "Showtime",
+  "DC Studios",
+  "Columbia Pictures",
+  "New Line Cinema",
+  "Blumhouse Productions",
+];
+
 const DECADES = [
   { id: "", label: "Any decade" },
   { id: "2020s", label: "2020s", min: 2020, max: 2029 },
@@ -65,11 +90,35 @@ export default function BrowsePage({
   const [studioName, _setStudioName] = useState(
     initial?.studio || storage.get("browseStudioName") || "",
   );
+  const [recentStudios, setRecentStudios] = useState(
+    () => storage.get("browseStudioRecent") || [],
+  );
+  // Chip-driven picks (initial.studio) count as recents too
+  const didInitRecent = useRef(false);
+  useEffect(() => {
+    if (didInitRecent.current || !studio) return;
+    didInitRecent.current = true;
+    const recents = [
+      { key: studio, label: studioName || studio },
+      ...recentStudios.filter((r) => r.key !== studio),
+    ].slice(0, 6);
+    setRecentStudios(recents);
+    storage.set("browseStudioRecent", recents);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const setStudio = (norm, display) => {
     storage.set("browseStudio", norm);
     storage.set("browseStudioName", display || "");
     _setStudio(norm);
     _setStudioName(display || norm);
+    if (norm) {
+      const recents = [
+        { key: norm, label: display || norm },
+        ...recentStudios.filter((r) => r.key !== norm),
+      ].slice(0, 6);
+      setRecentStudios(recents);
+      storage.set("browseStudioRecent", recents);
+    }
   };
   // "Hide watched" — persisted so it survives page switches
   const [hideWatched, _setHideWatched] = useState(
@@ -200,23 +249,17 @@ export default function BrowsePage({
 
   // Studio mode: resolve the company on Wikidata → its full title list →
   // detail cards. A real per-studio catalog, not just a loaded-items filter.
+  // studioIds keeps the complete id list so Load More can page through it.
   const [studioItems, setStudioItems] = useState(null);
+  const [studioIds, setStudioIds] = useState([]);
   const [studioLoading, setStudioLoading] = useState(false);
-  useEffect(() => {
-    if (!studio) {
-      setStudioItems(null);
-      return;
-    }
-    let cancelled = false;
-    setStudioLoading(true);
-    setStudioItems(null);
-    (async () => {
-      const label = studioName || studio;
-      const ids = await fetchStudioTitleIds(label, type).catch(() => []);
+  const studioBusy = useRef(false);
+
+  const fetchStudioBatch = useCallback(
+    async (ids, offset, count) => {
       const out = [];
-      const slice = ids.slice(0, 60);
+      const slice = ids.slice(offset, offset + count);
       for (let i = 0; i < slice.length; i += 8) {
-        if (cancelled) return;
         await Promise.all(
           slice.slice(i, i + 8).map(async (id) => {
             try {
@@ -227,15 +270,47 @@ export default function BrowsePage({
           }),
         );
       }
+      return out;
+    },
+    [type, apiKey],
+  );
+
+  useEffect(() => {
+    if (!studio) {
+      setStudioItems(null);
+      setStudioIds([]);
+      return;
+    }
+    let cancelled = false;
+    setStudioLoading(true);
+    setStudioItems(null);
+    setStudioIds([]);
+    (async () => {
+      const label = studioName || studio;
+      const ids = await fetchStudioTitleIds(label, type).catch(() => []);
+      if (cancelled) return;
+      setStudioIds(ids);
+      const first = await fetchStudioBatch(ids, 0, 48);
       if (!cancelled) {
-        setStudioItems(out);
+        setStudioItems(first);
         setStudioLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studio, studioName, type, apiKey]);
+
+  const loadMoreStudio = async () => {
+    if (studioBusy.current || !studioItems) return;
+    studioBusy.current = true;
+    setStudioLoading(true);
+    const more = await fetchStudioBatch(studioIds, studioItems.length, 40);
+    setStudioItems((prev) => [...(prev || []), ...more]);
+    setStudioLoading(false);
+    studioBusy.current = false;
+  };
 
   const getRating = useCallback(
     (item) => getRatingForItem(item, ratingsMap),
@@ -380,30 +455,67 @@ export default function BrowsePage({
               </option>
             ))}
           </select>
-          {(studioOptions.length > 0 || studio) && (
-            <select
-              className="browse-sort"
-              value={studio}
-              onChange={(e) => {
-                const key = e.target.value;
-                const opt = studioOptions.find((o) => o.key === key);
-                setStudio(key, opt ? opt.label : "");
-              }}
-              title="Browse a studio/network's full catalog (via Wikidata)"
-            >
-              <option value="">Any studio</option>
-              {studio &&
-                !studioOptions.some((o) => o.key === studio) &&
-                studioName && (
-                  <option value={studio}>{studioName}</option>
-                )}
-              {studioOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
+          <select
+            className="browse-sort"
+            value={studio}
+            onChange={(e) => {
+              const key = e.target.value;
+              const opt =
+                studioOptions.find((o) => o.key === key) ||
+                recentStudios.find((o) => o.key === key);
+              const label =
+                opt?.label ||
+                PRESET_STUDIOS.find((p) => normalizeStudio(p) === key) ||
+                studioName;
+              setStudio(key, label);
+            }}
+            title="Browse a studio/network's full catalog (via Wikidata)"
+          >
+            <option value="">Any studio</option>
+            {studio &&
+              !studioOptions.some((o) => o.key === studio) &&
+              !recentStudios.some((o) => o.key === studio) &&
+              !PRESET_STUDIOS.some((p) => normalizeStudio(p) === studio) &&
+              studioName && <option value={studio}>{studioName}</option>}
+            {recentStudios.length > 0 && (
+              <optgroup label="Recent">
+                {recentStudios.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Popular studios">
+              {PRESET_STUDIOS.filter(
+                (p) =>
+                  !recentStudios.some(
+                    (r) => r.key === normalizeStudio(p),
+                  ),
+              ).map((p) => (
+                <option key={p} value={normalizeStudio(p)}>
+                  {p}
                 </option>
               ))}
-            </select>
-          )}
+            </optgroup>
+            {studioOptions.length > 0 && (
+              <optgroup label="On this page">
+                {studioOptions
+                  .filter(
+                    (o) =>
+                      !recentStudios.some((r) => r.key === o.key) &&
+                      !PRESET_STUDIOS.some(
+                        (p) => normalizeStudio(p) === o.key,
+                      ),
+                  )
+                  .map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
           <button
             className="browse-chip"
             title="Open a random title from what's loaded"
@@ -507,8 +619,8 @@ export default function BrowsePage({
               {studioItems && (
                 <span style={{ color: "var(--text3)" }}>
                   {" "}
-                  · {studioItems.length} title
-                  {studioItems.length !== 1 ? "s" : ""}
+                  · {studioItems.length} of {studioIds.length} title
+                  {studioIds.length !== 1 ? "s" : ""}
                 </span>
               )}
             </span>
@@ -582,6 +694,20 @@ export default function BrowsePage({
               onClick={() => setPageNum((n) => n + 1)}
             >
               {loading ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
+
+        {studio && studioItems && studioItems.length < studioIds.length && (
+          <div style={{ textAlign: "center", marginTop: 20 }}>
+            <button
+              className="btn btn-secondary"
+              disabled={studioLoading}
+              onClick={loadMoreStudio}
+            >
+              {studioLoading
+                ? "Loading…"
+                : `Load more (${studioIds.length - studioItems.length} left)`}
             </button>
           </div>
         )}
