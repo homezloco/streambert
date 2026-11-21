@@ -399,7 +399,7 @@ export default function BrowsePage({
                 )}
               {studioOptions.map((o) => (
                 <option key={o.key} value={o.key}>
-                  {o.label} ({o.count})
+                  {o.label}
                 </option>
               ))}
             </select>
