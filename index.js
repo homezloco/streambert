@@ -441,16 +441,6 @@ function baseDomain(host) {
   return parts.length > 2 ? parts.slice(-2).join(".") : host;
 }
 
-function sameSiteDomain(urlA, urlB) {
-  try {
-    return (
-      baseDomain(new URL(urlA).hostname) === baseDomain(new URL(urlB).hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
 // Injected into adult site pages: kills clicks that lead off-domain (ad
 // anchors) and full-screen overlay divs appended after load (extreme z-index
 // + viewport coverage is the classic ad-overlay signature; site modals
@@ -528,10 +518,28 @@ const ADULT_POPUNDER_JS = `(function () {
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();`;
 
-// Cancels main-frame navigations that leave an adult site's domain
-// (click-hijack redirects). Installed on all player webviews; no-ops for
-// non-adult hosts.
-function guardAdultNavigation(wc) {
+// Partitions whose guests get the main-frame nav lock. persist:svc_* stays
+// exempt — services like Paramount+ legitimately roam related domains
+// (auth.cdn.*, etc.) while browsing.
+const LOCKED_NAV_PARTS = (p) =>
+  p === "persist:player" ||
+  p === "persist:trailer" ||
+  (typeof p === "string" && p.startsWith("persist:adult_"));
+
+// Cancels main-frame navigations that leave the current site's domain.
+// Covers adult sites (click-hijack redirects) AND regular streaming embeds,
+// where the same trick is the dominant "popup" — a click swaps the whole
+// webview to an ad page. Domains the guest has already committed are
+// remembered, so embeds can still hop back to previously-seen mirrors, and
+// the pre-first-commit redirect chain is allowed so a mirror 302 doesn't
+// kill the initial load.
+function guardGuestNavigation(wc) {
+  const seen = new Set();
+  wc.on("did-navigate", () => {
+    try {
+      seen.add(baseDomain(new URL(wc.getURL()).hostname));
+    } catch {}
+  });
   const onNav = (e, url, _isInPlace, isMainFrame) => {
     try {
       if (isMainFrame === false) return;
@@ -539,12 +547,56 @@ function guardAdultNavigation(wc) {
       // captured stream can be swapped into the built-in player
       if (url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost"))
         return;
-      if (!urlMatchesHosts(wc.getURL(), ADULT_NAV_HOSTS)) return;
-      if (!sameSiteDomain(url, wc.getURL())) e.preventDefault();
+      const cur = wc.getURL();
+      // Aggregators: outbound links are the content, don't lock them
+      if (urlMatchesHosts(cur, ADULT_OVERLAY_ONLY_HOSTS)) return;
+      const part = wc.session && wc.session.partition;
+      if (!LOCKED_NAV_PARTS(part)) return;
+      let curDom = null;
+      try {
+        curDom = baseDomain(new URL(cur).hostname);
+      } catch {}
+      const destDom = baseDomain(new URL(url).hostname);
+      if (destDom === curDom || seen.has(destDom)) return;
+      // Still inside the initial load's redirect chain — let it finish
+      if (seen.size === 0) return;
+      blockStats.recordBlockedRequest(url);
+      e.preventDefault();
     } catch {}
   };
   wc.on("will-navigate", onNav);
   wc.on("will-redirect", onNav);
+}
+
+// Shared guest hardening used by webviews AND the pop-out window: popup
+// denial, nav lock, beforeunload ad-trap suppression, and the popunder/
+// overlay killer on adult hosts (plus every host inside player partitions,
+// where the script's click-killer doubles as an anti-clickjack measure).
+function hardenGuestWebContents(wc) {
+  installPopupHandler(wc);
+  guardGuestNavigation(wc);
+  // "Leave site?" dialogs are an ad-network trick on guest pages — the app
+  // owns navigation, so let unloads proceed silently.
+  wc.on("will-prevent-unload", (e) => e.preventDefault());
+  wc.on("dom-ready", () => {
+    try {
+      const url = wc.getURL();
+      // Never inject into the app's own native-player pages
+      if (
+        url.startsWith("http://127.0.0.1") ||
+        url.startsWith("http://localhost")
+      )
+        return;
+      const part = wc.session && wc.session.partition;
+      const isGuestPart =
+        part === "persist:player" ||
+        part === "persist:trailer" ||
+        (typeof part === "string" && part.startsWith("persist:adult_"));
+      if (isGuestPart || urlMatchesHosts(url, ADULT_ALL_HOSTS)) {
+        wc.executeJavaScript(ADULT_POPUNDER_JS).catch(() => {});
+      }
+    } catch {}
+  });
 }
 
 // Sets the YouTube consent cookie (suppresses the consent gate) in a session.
@@ -752,6 +804,10 @@ function createWindow() {
     },
   });
 
+  // The renderer never needs real popup windows — external links go through
+  // the openExternal IPC. Deny stray window.open/target=_blank outright.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
   // Force long-lived disk caching for TMDB images in the default session.
   session.defaultSession.webRequest.onHeadersReceived(
     { urls: ["*://image.tmdb.org/*"] },
@@ -824,16 +880,7 @@ function createWindow() {
       }
     } catch {}
 
-    installPopupHandler(wc);
-    guardAdultNavigation(wc);
-    // Inject the popunder/overlay killer on every page load on adult hosts.
-    wc.on("dom-ready", () => {
-      try {
-        if (urlMatchesHosts(wc.getURL(), ADULT_ALL_HOSTS)) {
-          wc.executeJavaScript(ADULT_POPUNDER_JS).catch(() => {});
-        }
-      } catch {}
-    });
+    hardenGuestWebContents(wc);
     wc.on("enter-html-full-screen", () =>
       mainWindow.webContents.send("webview-enter-fullscreen"),
     );
@@ -1150,8 +1197,10 @@ ipcMain.handle("open-pip-window", (_, { url, title, userAgent }) => {
     },
   });
 
-  // Block all popup windows from the streaming site and any nested frames
-  installPopupHandler(pipWindow.webContents);
+  // Block all popup windows from the streaming site and any nested frames,
+  // and give the pop-out the same nav lock + overlay killer as webviews
+  // (the pop-out runs on persist:player, so the lock applies).
+  hardenGuestWebContents(pipWindow.webContents);
   siteTweaks.attach(pipWindow.webContents);
 
   // If the site uses <webview> elements (unlikely but safe), block there too
