@@ -4,7 +4,11 @@ import { storage } from "../utils/storage";
 import { tmdbFetch, MOVIE_GENRES, TV_GENRES } from "../utils/api";
 import { useRatings, getRatingForItem } from "../utils/useRatings";
 import { isRestricted } from "../utils/ageRating";
-import { useStudios } from "../utils/studios";
+import {
+  useStudios,
+  normalizeStudio,
+  fetchStudioTitleIds,
+} from "../utils/studios";
 
 const SORTS = [
   { id: "popularity.desc", label: "Most Popular" },
@@ -53,13 +57,19 @@ export default function BrowsePage({
     storage.set("browseDecade", v);
     _setDecade(v);
   };
-  // Studio/network filter — companies resolved per title via Wikidata
-  const [studio, _setStudio] = useState(
-    initial?.studio || storage.get("browseStudio") || "",
+  // Studio/network browse — selection stored as normalized key + display
+  // name (variant spellings like "HBO" vs "HBO Entertainment" merge)
+  const [studio, _setStudio] = useState(() =>
+    normalizeStudio(initial?.studio || storage.get("browseStudio") || ""),
   );
-  const setStudio = (v) => {
-    storage.set("browseStudio", v);
-    _setStudio(v);
+  const [studioName, _setStudioName] = useState(
+    initial?.studio || storage.get("browseStudioName") || "",
+  );
+  const setStudio = (norm, display) => {
+    storage.set("browseStudio", norm);
+    storage.set("browseStudioName", display || "");
+    _setStudio(norm);
+    _setStudioName(display || norm);
   };
   // "Hide watched" — persisted so it survives page switches
   const [hideWatched, _setHideWatched] = useState(
@@ -105,8 +115,13 @@ export default function BrowsePage({
   // Page fetch. Cinemeta genre catalogs don't paginate server-side, so a
   // short/empty second page simply ends the list. Text search goes through
   // /search (works keyless via Cinemeta search catalogs) and is single-page.
+  // Skipped entirely while a studio catalog is shown.
   useEffect(() => {
     let mounted = true;
+    if (studio) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     if (query) {
       if (pageNum > 1) {
@@ -158,22 +173,69 @@ export default function BrowsePage({
     return () => {
       mounted = false;
     };
-  }, [type, sort, genre, query, pageNum, apiKey]);
+  }, [type, sort, genre, query, pageNum, apiKey, studio]);
 
   const { ratingsMap, ageLimitSetting } = useRatings(items);
   const studioMap = useStudios(items);
 
-  // Companies present across loaded items, most common first
+  // Companies present across loaded items, grouped by normalized name
+  // (merges variants), most common first
   const studioOptions = useMemo(() => {
-    const counts = new Map();
+    const groups = new Map();
     for (const i of items) {
-      for (const name of studioMap[i.id] || [])
-        counts.set(name, (counts.get(name) || 0) + 1);
+      for (const name of studioMap[i.id] || []) {
+        const key = normalizeStudio(name);
+        if (!key) continue;
+        const g = groups.get(key) || { label: name, count: 0 };
+        g.count++;
+        if (name.length < g.label.length) g.label = name;
+        groups.set(key, g);
+      }
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    return [...groups.entries()]
+      .map(([key, g]) => ({ key, ...g }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .slice(0, 60);
   }, [items, studioMap]);
+
+  // Studio mode: resolve the company on Wikidata → its full title list →
+  // detail cards. A real per-studio catalog, not just a loaded-items filter.
+  const [studioItems, setStudioItems] = useState(null);
+  const [studioLoading, setStudioLoading] = useState(false);
+  useEffect(() => {
+    if (!studio) {
+      setStudioItems(null);
+      return;
+    }
+    let cancelled = false;
+    setStudioLoading(true);
+    setStudioItems(null);
+    (async () => {
+      const label = studioName || studio;
+      const ids = await fetchStudioTitleIds(label, type).catch(() => []);
+      const out = [];
+      const slice = ids.slice(0, 60);
+      for (let i = 0; i < slice.length; i += 8) {
+        if (cancelled) return;
+        await Promise.all(
+          slice.slice(i, i + 8).map(async (id) => {
+            try {
+              const d = await tmdbFetch(`/${type}/${id}`, apiKey);
+              if (d && (d.id || d.title || d.name))
+                out.push({ ...d, media_type: type });
+            } catch {}
+          }),
+        );
+      }
+      if (!cancelled) {
+        setStudioItems(out);
+        setStudioLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [studio, studioName, type, apiKey]);
 
   const getRating = useCallback(
     (item) => getRatingForItem(item, ratingsMap),
@@ -201,27 +263,54 @@ export default function BrowsePage({
     return () => obs.disconnect();
   }, [hasMore, loading]);
 
-  // Client-side decade filter (no server-side year range in Cinemeta)
+  // Client-side decade filter (no server-side year range in Cinemeta).
+  // In studio mode the base list is the studio's catalog and genre/search/
+  // sort apply client-side too.
   const decadeRange = DECADES.find((d) => d.id === decade);
-  const shown = useMemo(
-    () =>
-      items.filter((i) => {
-        if (
-          decadeRange?.min != null &&
-          (itemYear(i) < decadeRange.min || itemYear(i) > decadeRange.max)
-        )
+  const baseList = studio ? studioItems || [] : items;
+  const shown = useMemo(() => {
+    let list = baseList.filter((i) => {
+      if (
+        decadeRange?.min != null &&
+        (itemYear(i) < decadeRange.min || itemYear(i) > decadeRange.max)
+      )
+        return false;
+      if (hideWatched && watched?.[`${i.media_type || type}_${i.id}`])
+        return false;
+      if (studio) {
+        if (genre != null && !(i.genre_ids || []).includes(genre))
           return false;
-        if (
-          hideWatched &&
-          watched?.[`${i.media_type || type}_${i.id}`]
-        )
-          return false;
-        if (studio && !(studioMap[i.id] || []).includes(studio))
-          return false;
-        return true;
-      }),
-    [items, decadeRange, hideWatched, watched, type, studio, studioMap],
-  );
+        if (query) {
+          const t = (i.title || i.name || "").toLowerCase();
+          if (!t.includes(query.toLowerCase())) return false;
+        }
+      }
+      return true;
+    });
+    if (studio) {
+      if (sort === "year.desc" || sort === "year.asc") {
+        const dir = sort === "year.desc" ? -1 : 1;
+        list = [...list].sort((a, b) => dir * (itemYear(a) - itemYear(b)));
+      } else {
+        // popularity/top-rated → imdbRating is the closest keyless signal
+        list = [...list].sort(
+          (a, b) => (b.vote_average || 0) - (a.vote_average || 0),
+        );
+      }
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    baseList,
+    decadeRange,
+    hideWatched,
+    watched,
+    type,
+    studio,
+    genre,
+    query,
+    sort,
+  ]);
 
   const enrichedRatingsMap = useMemo(() => {
     const out = {};
@@ -267,8 +356,12 @@ export default function BrowsePage({
             className="browse-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            disabled={!!query}
-            title={query ? "Sorting is disabled while searching" : undefined}
+            disabled={!!query && !studio}
+            title={
+              query && !studio
+                ? "Sorting is disabled while searching"
+                : undefined
+            }
           >
             {SORTS.map((s) => (
               <option key={s.id} value={s.id}>
@@ -287,17 +380,26 @@ export default function BrowsePage({
               </option>
             ))}
           </select>
-          {studioOptions.length > 0 && (
+          {(studioOptions.length > 0 || studio) && (
             <select
               className="browse-sort"
               value={studio}
-              onChange={(e) => setStudio(e.target.value)}
-              title="Filter by production company / network (via Wikidata)"
+              onChange={(e) => {
+                const key = e.target.value;
+                const opt = studioOptions.find((o) => o.key === key);
+                setStudio(key, opt ? opt.label : "");
+              }}
+              title="Browse a studio/network's full catalog (via Wikidata)"
             >
               <option value="">Any studio</option>
-              {studioOptions.map(([name, n]) => (
-                <option key={name} value={name}>
-                  {name} ({n})
+              {studio &&
+                !studioOptions.some((o) => o.key === studio) &&
+                studioName && (
+                  <option value={studio}>{studioName}</option>
+                )}
+              {studioOptions.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label} ({o.count})
                 </option>
               ))}
             </select>
@@ -386,14 +488,63 @@ export default function BrowsePage({
         </div>
         </div>
 
-        {items.length === 0 && loading && (
+        {studio && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              margin: "4px 0 12px",
+              fontSize: 13,
+              color: "var(--text2)",
+            }}
+          >
+            <span>
+              Studio:{" "}
+              <strong style={{ color: "var(--text1)" }}>
+                {studioName || studio}
+              </strong>
+              {studioItems && (
+                <span style={{ color: "var(--text3)" }}>
+                  {" "}
+                  · {studioItems.length} title
+                  {studioItems.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </span>
+            <button
+              className="browse-chip"
+              onClick={() => setStudio("", "")}
+            >
+              ✕ Clear
+            </button>
+          </div>
+        )}
+
+        {studio && studioLoading && (
           <div className="cards-grid">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="card-skeleton" />
             ))}
           </div>
         )}
-        {items.length === 0 && !loading && (
+
+        {studio && !studioLoading && studioItems && studioItems.length === 0 && (
+          <div
+            style={{ color: "var(--text3)", padding: "40px 0", fontSize: 14 }}
+          >
+            No titles found for this studio on Wikidata.
+          </div>
+        )}
+
+        {!studio && items.length === 0 && loading && (
+          <div className="cards-grid">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="card-skeleton" />
+            ))}
+          </div>
+        )}
+        {!studio && items.length === 0 && !loading && (
           <div
             style={{ color: "var(--text3)", padding: "40px 0", fontSize: 14 }}
           >
@@ -422,7 +573,7 @@ export default function BrowsePage({
           })}
         </div>
 
-        {items.length > 0 && hasMore && (
+        {!studio && items.length > 0 && hasMore && (
           <div style={{ textAlign: "center", marginTop: 20 }}>
             <div ref={sentinelRef} />
             <button

@@ -59,8 +59,10 @@ export const BACKUP_KEYS = [
   "browseDecade",
   "browseHideWatched",
   "browseStudio",
-  // Studio/network resolution cache (Wikidata)
+  "browseStudioName",
+  // Studio/network resolution caches (Wikidata)
   "studioCache",
+  "studioCatCache",
   // Player defaults & custom speed presets
   "playerDefRate",
   "playerDefVol",
