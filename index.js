@@ -575,6 +575,17 @@ function guardGuestNavigation(wc) {
 function hardenGuestWebContents(wc) {
   installPopupHandler(wc);
   guardGuestNavigation(wc);
+  // Guests swallow keyboard input once focused — forward Escape so the app
+  // can still exit its own player-fullscreen overlay.
+  wc.on("before-input-event", (_e, input) => {
+    if (input.type === "keyDown" && input.key === "Escape") {
+      try {
+        const mw = getMainWindow();
+        if (mw && !mw.isDestroyed())
+          mw.webContents.send("guest-escape");
+      } catch {}
+    }
+  });
   // "Leave site?" dialogs are an ad-network trick on guest pages — the app
   // owns navigation, so let unloads proceed silently.
   wc.on("will-prevent-unload", (e) => e.preventDefault());

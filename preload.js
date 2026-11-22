@@ -106,6 +106,14 @@ contextBridge.exposeInMainWorld("electron", {
   },
   offWebviewLeaveFullscreen: (h) =>
     ipcRenderer.removeListener("webview-leave-fullscreen", h),
+  // Escape forwarded from a focused guest webContents (guests swallow
+  // key events, so the host page can't see them directly)
+  onGuestEscape: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on("guest-escape", h);
+    return h;
+  },
+  offGuestEscape: (h) => ipcRenderer.removeListener("guest-escape", h),
 
   // Block stats
   onBlockedUpdate: (cb) => {

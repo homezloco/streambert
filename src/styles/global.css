@@ -1620,8 +1620,11 @@ select:focus-visible {
     color: rgba(255, 255, 255, 0.85);
     font-size: 15px;
     cursor: pointer;
-    opacity: 0.35;
+    opacity: 0.55;
     transition: opacity 0.15s;
+}
+.player-wrap:hover .player-fs-exit {
+    opacity: 1;
 }
 .player-fs-exit:hover {
     opacity: 1;

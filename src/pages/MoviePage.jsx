@@ -1027,25 +1027,36 @@ export default function MoviePage({
   }, [playing, playerSource]);
 
   // Auto-enter player fullscreen when playback starts (playerAutoFs pref,
-  // default on). Esc or the ✕ button exits.
+  // default on).
   const autoFsRef = useRef(storage.get("playerAutoFs") !== false);
   useEffect(() => {
     if (!playing || !autoFsRef.current) return;
     setPlayerFullscreen(true);
     document.documentElement.setAttribute("data-player-fullscreen", "1");
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        setPlayerFullscreen(false);
-        document.documentElement.removeAttribute("data-player-fullscreen");
-      }
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("keydown", onKey);
       setPlayerFullscreen(false);
       document.documentElement.removeAttribute("data-player-fullscreen");
     };
   }, [playing]);
+
+  // Exit paths while player-fullscreen is up: Esc in the page AND Esc inside
+  // a focused guest webview (guests swallow keys — main process forwards it).
+  const exitPlayerFs = useCallback(() => {
+    setPlayerFullscreen(false);
+    document.documentElement.removeAttribute("data-player-fullscreen");
+  }, []);
+  useEffect(() => {
+    if (!playerFullscreen) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") exitPlayerFs();
+    };
+    window.addEventListener("keydown", onKey);
+    const escH = window.electron?.onGuestEscape?.(() => exitPlayerFs());
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (escH) window.electron?.offGuestEscape?.(escH);
+    };
+  }, [playerFullscreen, exitPlayerFs]);
 
   // ── PiP pop-out: navigate main webview away so only one stream is active ──
   useEffect(() => {
@@ -1316,12 +1327,7 @@ export default function MoviePage({
               <button
                 className="player-fs-exit"
                 title="Exit fullscreen (Esc)"
-                onClick={() => {
-                  setPlayerFullscreen(false);
-                  document.documentElement.removeAttribute(
-                    "data-player-fullscreen",
-                  );
-                }}
+                onClick={exitPlayerFs}
               >
                 ✕
               </button>
