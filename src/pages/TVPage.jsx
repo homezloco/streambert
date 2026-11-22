@@ -2007,6 +2007,27 @@ export default function TVPage({
     };
   }, [playing, playerSource]);
 
+  // Auto-enter player fullscreen when playback starts (playerAutoFs pref,
+  // default on). Esc or the ✕ button exits.
+  const autoFsRef = useRef(storage.get("playerAutoFs") !== false);
+  useEffect(() => {
+    if (!playing || !autoFsRef.current) return;
+    setPlayerFullscreen(true);
+    document.documentElement.setAttribute("data-player-fullscreen", "1");
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setPlayerFullscreen(false);
+        document.documentElement.removeAttribute("data-player-fullscreen");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      setPlayerFullscreen(false);
+      document.documentElement.removeAttribute("data-player-fullscreen");
+    };
+  }, [playing]);
+
   // ── PiP pop-out: navigate main webview away so only one stream is active ──
   useEffect(() => {
     if (!playing) return;
@@ -2227,6 +2248,20 @@ export default function TVPage({
                 className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}`}
                 ref={playerWrapRef}
               >
+                {playerFullscreen && (
+                  <button
+                    className="player-fs-exit"
+                    title="Exit fullscreen (Esc)"
+                    onClick={() => {
+                      setPlayerFullscreen(false);
+                      document.documentElement.removeAttribute(
+                        "data-player-fullscreen",
+                      );
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
                 {/* Universal source-loading overlay, shown instantly on every source/episode switch */}
                 {webviewLoading && !resolveError && (
                   <div

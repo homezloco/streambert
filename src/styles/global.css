@@ -1607,6 +1607,27 @@ select:focus-visible {
     display: none !important;
 }
 
+.player-fs-exit {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 15px;
+    cursor: pointer;
+    opacity: 0.35;
+    transition: opacity 0.15s;
+}
+.player-fs-exit:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.8);
+}
+
 /* Fix window-dragging on MacOS */
 .window-titlebar {
     -webkit-app-region: drag;

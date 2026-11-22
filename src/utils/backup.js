@@ -71,6 +71,7 @@ export const BACKUP_KEYS = [
   "playerDefCueSize",
   "playerDefSubOff",
   "playerSpeeds",
+  "playerAutoFs",
   // Source reliability learning
   "sourceStats",
   "titleSources",

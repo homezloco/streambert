@@ -2714,6 +2714,9 @@ function PlayerDefaultsSection() {
   const [rate, setRate] = useState(() => storage.get("playerDefRate") ?? "");
   const [vol, setVol] = useState(() => storage.get("playerDefVol") ?? "");
   const [muted, setMuted] = useState(() => storage.get("playerDefMuted") ?? "");
+  const [autoFs, setAutoFs] = useState(() =>
+    storage.get("playerAutoFs") !== false ? "true" : "false",
+  );
   const [cueSize, setCueSize] = useState(
     () => storage.get("playerDefCueSize") ?? "",
   );
@@ -2838,6 +2841,23 @@ function PlayerDefaultsSection() {
               { value: "", label: "Auto (remember last)" },
               { value: "true", label: "Muted" },
               { value: "false", label: "Unmuted" },
+            ]}
+          />
+        </div>
+
+        {/* Auto-fullscreen */}
+        <div>
+          <div style={rowLabel}>Auto-fullscreen on play</div>
+          <SettingsSelect
+            value={autoFs}
+            onChange={(v) => {
+              setAutoFs(v);
+              storage.set("playerAutoFs", v === "true");
+              flash();
+            }}
+            options={[
+              { value: "true", label: "On" },
+              { value: "false", label: "Off" },
             ]}
           />
         </div>
