@@ -1612,7 +1612,8 @@ select:focus-visible {
 
 .player-fs-exit {
     position: absolute;
-    top: 14px;
+    /* sits below the download button (top:12 right:12, ~36px tall) */
+    top: 56px;
     right: 14px;
     z-index: 30;
     width: 36px;
