@@ -1602,8 +1602,11 @@ select:focus-visible {
     border: none !important;
 }
 
-.player-wrap--fullscreen .player-overlay-group,
-.player-wrap--fullscreen .player-overlay-btn {
+/* Only hide the toolbar when the embed itself went fullscreen — for
+   app-entered fullscreen (auto-fs on play) keep it so source/language
+   controls stay reachable. */
+.player-wrap--fullscreen.embed-fs .player-overlay-group,
+.player-wrap--fullscreen.embed-fs .player-overlay-btn {
     display: none !important;
 }
 

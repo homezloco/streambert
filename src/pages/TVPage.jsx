@@ -529,6 +529,9 @@ export default function TVPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcId.id]);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  // true when fullscreen came from the embed's own button — toolbar stays
+  // hidden then so it doesn't collide with the embed's fullscreen UI.
+  const [embedFs, setEmbedFs] = useState(false);
   const [pipOpen, setPipOpen] = useState(false);
   const pipUrlRef = useRef(null);
   const pipWebContentsIdRef = useRef(null); // cached WebContents ID of the pop-out window
@@ -1991,10 +1994,12 @@ export default function TVPage({
     if (!NEEDS_INTERCEPT.includes(playerSource)) return;
     const enterH = window.electron?.onWebviewEnterFullscreen?.(() => {
       // requestFullscreen() is rejected when Electron is already in fullscreen -> use css overlay
+      setEmbedFs(true);
       setPlayerFullscreen(true);
       document.documentElement.setAttribute("data-player-fullscreen", "1");
     });
     const leaveH = window.electron?.onWebviewLeaveFullscreen?.(() => {
+      setEmbedFs(false);
       setPlayerFullscreen(false);
       document.documentElement.removeAttribute("data-player-fullscreen");
       if (document.fullscreenElement) document.exitFullscreen?.();
@@ -2023,6 +2028,7 @@ export default function TVPage({
   // Exit paths while player-fullscreen is up: Esc in the page AND Esc inside
   // a focused guest webview (guests swallow keys — main process forwards it).
   const exitPlayerFs = useCallback(() => {
+    setEmbedFs(false);
     setPlayerFullscreen(false);
     document.documentElement.removeAttribute("data-player-fullscreen");
   }, []);
@@ -2256,7 +2262,7 @@ export default function TVPage({
                 )}
               </div>
               <div
-                className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}`}
+                className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}${embedFs ? " embed-fs" : ""}`}
                 ref={playerWrapRef}
               >
                 {playerFullscreen && (

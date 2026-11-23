@@ -618,7 +618,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
 #menu button.on{color:#ff4d4d;font-weight:600}
 /* timeline strip with hover preview — native controls can't be extended,
    so this sits just above the built-in control bar */
-#seekbar{position:absolute;left:0;right:0;bottom:46px;height:16px;z-index:15;cursor:pointer}
+#seekbar{position:absolute;left:0;right:0;bottom:52px;height:12px;z-index:15;cursor:pointer}
 #seekbar .rail{position:absolute;top:6px;left:0;right:0;height:4px;background:rgba(255,255,255,.22);transition:height .1s,top .1s}
 #seekbar:hover .rail{top:4px;height:8px}
 #seekbuf{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.35)}

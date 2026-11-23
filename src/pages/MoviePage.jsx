@@ -185,6 +185,9 @@ export default function MoviePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcId.id]);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  // true when fullscreen came from the embed's own button — toolbar stays
+  // hidden then so it doesn't collide with the embed's fullscreen UI.
+  const [embedFs, setEmbedFs] = useState(false);
   // pipOpen=true: main webview shows about:blank, pop-out window has the real player
   const [pipOpen, setPipOpen] = useState(false);
   const pipUrlRef = useRef(null); // URL to restore when pop-out closes
@@ -1011,10 +1014,12 @@ export default function MoviePage({
     if (!playing) return;
     if (!NEEDS_INTERCEPT.includes(playerSource)) return;
     const enterH = window.electron?.onWebviewEnterFullscreen?.(() => {
+      setEmbedFs(true);
       setPlayerFullscreen(true);
       document.documentElement.setAttribute("data-player-fullscreen", "1");
     });
     const leaveH = window.electron?.onWebviewLeaveFullscreen?.(() => {
+      setEmbedFs(false);
       setPlayerFullscreen(false);
       document.documentElement.removeAttribute("data-player-fullscreen");
       if (document.fullscreenElement) document.exitFullscreen?.();
@@ -1042,6 +1047,7 @@ export default function MoviePage({
   // Exit paths while player-fullscreen is up: Esc in the page AND Esc inside
   // a focused guest webview (guests swallow keys — main process forwards it).
   const exitPlayerFs = useCallback(() => {
+    setEmbedFs(false);
     setPlayerFullscreen(false);
     document.documentElement.removeAttribute("data-player-fullscreen");
   }, []);
@@ -1320,7 +1326,7 @@ export default function MoviePage({
       {playing && !restricted && !isUnreleased && (
         <div className="section">
           <div
-            className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}`}
+            className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}${embedFs ? " embed-fs" : ""}`}
             ref={playerWrapRef}
           >
             {playerFullscreen && (
