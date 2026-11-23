@@ -2020,8 +2020,10 @@ export default function TVPage({
     setPlayerFullscreen(true);
     document.documentElement.setAttribute("data-player-fullscreen", "1");
     return () => {
+      setEmbedFs(false);
       setPlayerFullscreen(false);
       document.documentElement.removeAttribute("data-player-fullscreen");
+      if (document.fullscreenElement) document.exitFullscreen?.();
     };
   }, [playing]);
 
@@ -2031,6 +2033,9 @@ export default function TVPage({
     setEmbedFs(false);
     setPlayerFullscreen(false);
     document.documentElement.removeAttribute("data-player-fullscreen");
+    // A guest fullscreen puts the whole WINDOW in OS fullscreen — exiting
+    // our overlay without this leaves the window stuck (undraggable).
+    if (document.fullscreenElement) document.exitFullscreen?.();
   }, []);
   useEffect(() => {
     if (!playerFullscreen) return;
