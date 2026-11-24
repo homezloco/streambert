@@ -638,6 +638,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
 <button id="skip" title="Skip ahead 85s (S)">Skip 85s &raquo;</button>
 <div id="tvpanel" hidden><iframe id="tvf" title="Play on TV"></iframe></div>
 <div id="toast" style="display:none;position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:40;background:rgba(15,15,15,.9);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 14px;font:13px system-ui,sans-serif;color:#eee"></div>
+<div id="bufmsg" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;background:rgba(15,15,15,.85);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:10px 20px;font:14px system-ui,sans-serif;color:#eee"></div>
 <div id="help" hidden><b>Shortcuts</b>
 <span>&larr;/&rarr;</span> or <span>J</span>/<span>L</span> seek &plusmn;10s &nbsp;<span>&uarr;/&darr;</span> volume<br>
 <span>K</span> play/pause &nbsp;<span>F</span> or double-click fullscreen &nbsp;<span>M</span> mute<br>
@@ -682,6 +683,30 @@ video::cue{font-size:var(--cuesz,1.15em)}
   if(DEF.muted===true||ck('sb_muted')==='1')video.muted=true;
   video.addEventListener('ratechange',()=>{document.cookie='sb_rate='+video.playbackRate+';path=/;max-age=31536000'});
   video.addEventListener('volumechange',()=>{document.cookie='sb_vol='+video.volume.toFixed(2)+';path=/;max-age=31536000';document.cookie='sb_muted='+(video.muted?1:0)+';path=/;max-age=31536000'});
+  // ── Prebuffer: when Settings → Player defaults sets a buffer-ahead target,
+  // hold playback until that many seconds are buffered (or a 30s deadline,
+  // so a slow network can never wedge the player at the start screen).
+  const bufmsg=document.getElementById('bufmsg');
+  const doPlay=()=>{video.play().catch(()=>{
+    video.muted=true;
+    video.play().catch(()=>{});
+    const un=()=>{video.muted=false;document.removeEventListener('click',un);document.removeEventListener('keydown',un);};
+    document.addEventListener('click',un);document.addEventListener('keydown',un);
+  });};
+  const PREBUF=(()=>{const n=+DEF.prebuffer;return n>=1&&n<=120?Math.round(n):0})();
+  const bufferedAhead=()=>{const b=video.buffered;for(let i=0;i<b.length;i++){if(video.currentTime>=b.start(i)-0.01&&video.currentTime<=b.end(i))return Math.max(0,b.end(i)-video.currentTime);}return 0};
+  const startWhenReady=()=>{
+    if(!PREBUF){doPlay();return;}
+    const deadline=Date.now()+30000;
+    const tick=()=>{
+      const a=bufferedAhead();
+      if(a>=PREBUF||Date.now()>=deadline){bufmsg.style.display='none';doPlay();return;}
+      bufmsg.textContent='Buffering '+Math.floor(a)+'s / '+PREBUF+'s\u2026';
+      bufmsg.style.display='block';
+      setTimeout(tick,250);
+    };
+    tick();
+  };
   // Report position back so the app can offer resume on the next open
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
@@ -1047,14 +1072,18 @@ video::cue{font-size:var(--cuesz,1.15em)}
     qsec.style.display='none';
     video.src=src;
     if(startTime>0)video.addEventListener('loadedmetadata',()=>{video.currentTime=startTime;},{once:true});
-    video.play().catch(()=>{
-      video.muted=true;
-      video.play().catch(()=>{});
-      const un=()=>{video.muted=false;document.removeEventListener('click',un);document.removeEventListener('keydown',un);};
-      document.addEventListener('click',un);document.addEventListener('keydown',un);
-    });
+    startWhenReady();
   }else if(window.Hls&&Hls.isSupported()){
-    const hls=new Hls({autoStartLoad:false});
+    const hls=new Hls({
+      autoStartLoad:false,
+      // Stay well ahead of the playhead so mid-watch stalls are rare.
+      // When a prebuffer target is configured the cap must exceed it or
+      // the target can never be reached.
+      maxBufferLength:Math.max(30,(PREBUF||0)+30),
+      maxMaxBufferLength:600,
+      maxBufferSize:200*1000*1000,
+      backBufferLength:60,
+    });
     window.__hls=hls;
     hls.loadSource(src);hls.attachMedia(video);
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,()=>{
@@ -1083,13 +1112,7 @@ video::cue{font-size:var(--cuesz,1.15em)}
       // start on the best quality (like ani-cli); ABR may still adapt downwards
       hls.startLevel=hls.levels.length-1;
       hls.startLoad(startTime>0?startTime:-1);
-      video.play().catch(()=>{
-        // autoplay-with-sound blocked: start muted, unmute on first gesture
-        video.muted=true;
-        video.play().catch(()=>{});
-        const un=()=>{video.muted=false;document.removeEventListener('click',un);document.removeEventListener('keydown',un);};
-        document.addEventListener('click',un);document.addEventListener('keydown',un);
-      });
+      startWhenReady();
       if(hls.levels&&hls.levels.length>1)buildLevels(hls);
       else qsec.style.display='none';
     });
@@ -1772,6 +1795,8 @@ function sanitizePlayerPrefs(p) {
       .slice(0, 10);
     if (speeds.length) out.speeds = speeds;
   }
+  v = num(p.prebuffer, 1, 120);
+  if (v !== undefined) out.prebuffer = Math.round(v);
   return out;
 }
 

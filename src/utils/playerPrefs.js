@@ -3,8 +3,9 @@
 // page falls back to its "remember last" cookie behaviour.
 //
 // Keys read:  playerDefRate, playerDefVol, playerDefMuted,
-//             playerDefCueSize, playerDefSubOff, playerSpeeds
-// Keys emit:  { rate, vol, muted, cueSize, subOff, speeds }
+//             playerDefCueSize, playerDefSubOff, playerSpeeds,
+//             playerDefPrebuffer
+// Keys emit:  { rate, vol, muted, cueSize, subOff, speeds, prebuffer }
 
 import { storage } from "./storage";
 
@@ -26,6 +27,8 @@ export function playerDefaults() {
   if (subOff !== undefined) prefs.subOff = subOff;
   const speeds = parseSpeedList(storage.get("playerSpeeds"));
   if (speeds.length) prefs.speeds = speeds;
+  const prebuffer = numInRange(storage.get("playerDefPrebuffer"), 1, 120);
+  if (prebuffer !== undefined) prefs.prebuffer = Math.round(prebuffer);
   return prefs;
 }
 

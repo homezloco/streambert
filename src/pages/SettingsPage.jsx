@@ -2726,6 +2726,9 @@ function PlayerDefaultsSection() {
   const [speeds, setSpeeds] = useState(
     () => storage.get("playerSpeeds") ?? "",
   );
+  const [prebuffer, setPrebuffer] = useState(
+    () => storage.get("playerDefPrebuffer") ?? "",
+  );
   const [saved, setSaved] = useState(false);
 
   const flash = () => {
@@ -2968,6 +2971,32 @@ function PlayerDefaultsSection() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">Buffer ahead before playing</div>
+            <div className="settings-desc">
+              The app's own player waits until this much video is buffered
+              before it starts — good for connections that stall mid-watch.
+              It never waits longer than 30s, and keeps buffering well past
+              the target while playing. Only affects the native player, not
+              embedded sites.
+            </div>
+          </div>
+          <SettingsSelect
+            value={prebuffer}
+            onChange={setOrClear("playerDefPrebuffer", setPrebuffer)}
+            options={[
+              { value: "", label: "Off (start immediately)" },
+              { value: 10, label: "10 seconds" },
+              { value: 20, label: "20 seconds" },
+              { value: 30, label: "30 seconds" },
+              { value: 45, label: "45 seconds" },
+              { value: 60, label: "60 seconds" },
+              { value: 90, label: "90 seconds" },
+            ]}
+          />
         </div>
       </div>
 
