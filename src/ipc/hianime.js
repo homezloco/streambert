@@ -618,7 +618,10 @@ video::cue{font-size:var(--cuesz,1.15em)}
 #menu button.on{color:#ff4d4d;font-weight:600}
 /* timeline strip with hover preview — native controls can't be extended,
    so this sits just above the built-in control bar */
-#seekbar{position:absolute;left:0;right:0;bottom:52px;height:12px;z-index:15;cursor:pointer}
+/* Hide Chromium's own timeline except in real fullscreen (there it's the
+   only one) — ours takes its exact slot so it can't cover the buttons */
+video:not(:fullscreen)::-webkit-media-controls-timeline{display:none}
+#seekbar{position:absolute;left:0;right:0;bottom:44px;height:14px;z-index:15;cursor:pointer}
 #seekbar .rail{position:absolute;top:6px;left:0;right:0;height:4px;background:rgba(255,255,255,.22);transition:height .1s,top .1s}
 #seekbar:hover .rail{top:4px;height:8px}
 #seekbuf{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.35)}
@@ -756,11 +759,10 @@ video::cue{font-size:var(--cuesz,1.15em)}
   const skipIntro=()=>{video.currentTime=Math.min(video.duration||Infinity,video.currentTime+85);};
   skipBtn.onclick=skipIntro;
   video.addEventListener('timeupdate',()=>{skipBtn.style.display=(video.currentTime<900)?'block':'none';});
-  // Click toggles play/pause (250ms delay so dblclick→fullscreen wins);
-  // dblclick = fullscreen
-  let clickT=null;
-  video.addEventListener('click',()=>{clearTimeout(clickT);clickT=setTimeout(()=>{video.paused?video.play():video.pause()},250)});
-  video.addEventListener('dblclick',()=>{clearTimeout(clickT);document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
+  // Chromium's native controls already toggle play/pause on single click —
+  // a second custom toggle double-fires (pause then auto-resume). We only
+  // handle double-click for fullscreen; the two native toggles cancel out.
+  video.addEventListener('dblclick',()=>{document.fullscreenElement?document.exitFullscreen():video.requestFullscreen()});
   // ? or H shows a shortcut cheat-sheet; any key/click hides it
   const help=document.getElementById('help');
   const toggleHelp=()=>{help.hidden=!help.hidden;};
