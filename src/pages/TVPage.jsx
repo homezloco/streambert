@@ -606,6 +606,10 @@ export default function TVPage({
   );
   const autoMarkedRef = useRef(false);
   const lastKnownTimeRef = useRef(0);
+  // Snapshot of the previous episode's video (duration + last position)
+  // taken on episode switch — lets the progress tick ignore stale reads
+  // from the old webview document before navigation commits.
+  const prevVideoRef = useRef(null);
   const durationRef = useRef(0); // tracked for AniSkip progress bar markers
   const seekBackCooldownRef = useRef(0);
 
@@ -1462,6 +1466,12 @@ export default function TVPage({
 
   // Reset auto-mark guard and autoplay when episode changes
   useEffect(() => {
+    if (durationRef.current > 0)
+      prevVideoRef.current = {
+        d: durationRef.current,
+        ct: lastKnownTimeRef.current,
+        ts: Date.now(),
+      };
     autoMarkedRef.current = false;
     lastKnownTimeRef.current = 0;
     seekBackCooldownRef.current = 0;
@@ -1646,6 +1656,26 @@ export default function TVPage({
                 }
               })()
             `);
+          }
+
+          // ── Stale-read guard: right after an episode switch the guest can
+          // still report the PREVIOUS episode's video until navigation
+          // commits — identical duration, position parked at the old end.
+          // Without this, one tick writes the old end-time into the new
+          // episode's key and resume seeks it to the end.
+          if (prevVideoRef.current) {
+            const pv = prevVideoRef.current;
+            const stale =
+              result &&
+              result.duration > 0 &&
+              Date.now() - pv.ts < 10000 &&
+              !resumedRef.current &&
+              !result.recentUserSeek &&
+              Math.abs(result.duration - pv.d) < 1 &&
+              result.currentTime >= pv.ct - 5;
+            if (stale) return;
+            if (result || Date.now() - pv.ts >= 10000)
+              prevVideoRef.current = null;
           }
 
           // ── AniSkip logic: runs every tick (only when aniSkipActive) ────
