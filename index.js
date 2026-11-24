@@ -349,6 +349,11 @@ let mainWindow = null;
 const getMainWindow = () => mainWindow;
 
 const playerWcIds = new Set();
+// Guest webContents currently holding HTML fullscreen. A guest going
+// fullscreen puts the whole window in OS fullscreen — if it leaves,
+// navigates, or dies without a leave event we must restore the window
+// ourselves or it stays borderless and undraggable.
+const fsGuestWcIds = new Set();
 let sessionsConfigured = false;
 
 // Returns the default Chromium user agent without Electron/app identifiers.
@@ -894,14 +899,30 @@ function createWindow() {
     hardenGuestWebContents(wc);
     // Only forward fullscreen events for guests hosted by the main window —
     // a guest inside the pop-out window must not toggle the page's overlay.
-    wc.on("enter-html-full-screen", () => {
-      if (wc.hostWebContents === mainWindow.webContents)
-        mainWindow.webContents.send("webview-enter-fullscreen");
-    });
-    wc.on("leave-html-full-screen", () => {
-      if (wc.hostWebContents === mainWindow.webContents)
+    const isMainGuest = wc.hostWebContents === mainWindow.webContents;
+    const onGuestFsLeave = () => {
+      const was = fsGuestWcIds.delete(wc.id);
+      // Only tell the page fullscreen ended if this guest actually held it —
+      // navigations fire here too and must not exit the overlay spuriously.
+      if (was && isMainGuest)
         mainWindow.webContents.send("webview-leave-fullscreen");
+      // Watchdog: once no guest holds fullscreen, the window must not stay
+      // in OS fullscreen — that state hides the titlebar (undraggable).
+      if (
+        !fsGuestWcIds.size &&
+        !mainWindow.isDestroyed() &&
+        mainWindow.isFullScreen()
+      )
+        mainWindow.setFullScreen(false);
+    };
+    wc.on("enter-html-full-screen", () => {
+      if (!isMainGuest) return;
+      fsGuestWcIds.add(wc.id);
+      mainWindow.webContents.send("webview-enter-fullscreen");
     });
+    wc.on("leave-html-full-screen", onGuestFsLeave);
+    wc.on("destroyed", onGuestFsLeave);
+    wc.on("did-navigate", onGuestFsLeave);
   });
 
   mainWindow.loadFile(path.join(__dirname, "dist/index.html"));

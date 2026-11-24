@@ -699,6 +699,13 @@ export default function App() {
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
+  // Safety net: player-fullscreen state (the CSS overlay attribute or a real
+  // DOM fullscreen from a guest) must never leak across page changes — a
+  // leak hides the titlebar and can pin the window in OS fullscreen.
+  useEffect(() => {
+    document.documentElement.removeAttribute("data-player-fullscreen");
+    if (document.fullscreenElement) document.exitFullscreen?.();
+  }, [page]);
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
