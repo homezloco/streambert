@@ -29,7 +29,26 @@ export function playerDefaults() {
   if (speeds.length) prefs.speeds = speeds;
   const prebuffer = numInRange(storage.get("playerDefPrebuffer"), 1, 120);
   if (prebuffer !== undefined) prefs.prebuffer = Math.round(prebuffer);
+  Object.assign(prefs, videoEnhancePrefs());
   return prefs;
+}
+
+// Video enhancement settings (brightness/contrast/saturation/sharpen),
+// applied both to the app's own player (via prefs below) and injected into
+// guest webviews over the "video-enhance" IPC channel.
+export function videoEnhancePrefs() {
+  return {
+    bright: numInRange(storage.get("playerEnhBrightness"), 0.5, 2) ?? 1,
+    contrast: numInRange(storage.get("playerEnhContrast"), 0.5, 2) ?? 1,
+    saturate: numInRange(storage.get("playerEnhSaturation"), 0.5, 2) ?? 1,
+    sharpen: storage.get("playerEnhSharpen") === true,
+  };
+}
+
+// Push current enhancement prefs to the main process so it can inject them
+// into embedded players (app start + every settings change).
+export function pushVideoEnhance() {
+  window.electron?.setVideoEnhance?.(videoEnhancePrefs());
 }
 
 // "0.75, 1, 1.5, 2" → [0.75,1,1.5,2]; clamps to 0.25–4, dedupes, sorts, max 10

@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld("electron", {
   setPlayerVideo: (args) => ipcRenderer.invoke("set-player-video", args),
   // Replay a captured m3u8 through the local hls.js player (native mode)
   nativePlay: (args) => ipcRenderer.invoke("native-play", args),
+  setVideoEnhance: (cfg) => ipcRenderer.send("video-enhance", cfg),
   // progress of the HiAnime lookup (stage: "search" | "episodes" | "stream");
   // returns an unsubscribe function
   onHiAnimeProgress: (cb) => {

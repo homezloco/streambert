@@ -24,7 +24,7 @@ import {
   DEFAULT_CUSTOM_VARS,
 } from "../utils/appearance";
 import { SUBTITLE_LANGUAGES } from "../utils/subtitles";
-import { parseSpeedList } from "../utils/playerPrefs";
+import { parseSpeedList, pushVideoEnhance } from "../utils/playerPrefs";
 import { DEFAULT_INVIDIOUS_BASE } from "../components/TrailerModal";
 import { RATING_COUNTRIES } from "../utils/ageRating";
 import { WarningIcon } from "../components/Icons";
@@ -2729,6 +2729,28 @@ function PlayerDefaultsSection() {
   const [prebuffer, setPrebuffer] = useState(
     () => storage.get("playerDefPrebuffer") ?? "",
   );
+  const [enhBright, setEnhBright] = useState(
+    () => storage.get("playerEnhBrightness") ?? "",
+  );
+  const [enhContrast, setEnhContrast] = useState(
+    () => storage.get("playerEnhContrast") ?? "",
+  );
+  const [enhSaturate, setEnhSaturate] = useState(
+    () => storage.get("playerEnhSaturation") ?? "",
+  );
+  const [enhSharpen, setEnhSharpen] = useState(
+    () => storage.get("playerEnhSharpen") === true,
+  );
+  // Enhancement selects write "" for Normal (key removed); everything pushes
+  // straight to the main process so embeds update live too.
+  const setEnh = (key, setter) => (v) => {
+    setter(v);
+    if (v === "") storage.remove(key);
+    else if (v === true || v === false) storage.set(key, v);
+    else storage.set(key, Number(v));
+    pushVideoEnhance();
+    flash();
+  };
   const [saved, setSaved] = useState(false);
 
   const flash = () => {
@@ -2997,6 +3019,68 @@ function PlayerDefaultsSection() {
               { value: 90, label: "90 seconds" },
             ]}
           />
+        </div>
+
+        {/* Video enhancement — GPU filters applied to the video itself:
+            the app's player AND embedded site players. Applies live. */}
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">Video enhancement</div>
+            <div className="settings-desc">
+              Brighten a dark picture and sharpen soft streams — applied to
+              the video image itself in both the app's player and embedded
+              site players. Changes apply live.
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <SettingsSelect
+              value={enhBright}
+              onChange={setEnh("playerEnhBrightness", setEnhBright)}
+              options={[
+                { value: "", label: "Brightness: Normal" },
+                { value: 1.1, label: "Brightness: +10%" },
+                { value: 1.2, label: "Brightness: +20%" },
+                { value: 1.3, label: "Brightness: +30%" },
+                { value: 1.45, label: "Brightness: +45%" },
+                { value: 0.9, label: "Brightness: −10%" },
+              ]}
+            />
+            <SettingsSelect
+              value={enhContrast}
+              onChange={setEnh("playerEnhContrast", setEnhContrast)}
+              options={[
+                { value: "", label: "Contrast: Normal" },
+                { value: 1.05, label: "Contrast: +5%" },
+                { value: 1.1, label: "Contrast: +10%" },
+                { value: 1.2, label: "Contrast: +20%" },
+              ]}
+            />
+            <SettingsSelect
+              value={enhSaturate}
+              onChange={setEnh("playerEnhSaturation", setEnhSaturate)}
+              options={[
+                { value: "", label: "Colour: Normal" },
+                { value: 1.1, label: "Colour: +10%" },
+                { value: 1.25, label: "Colour: +25%" },
+                { value: 1.5, label: "Colour: +50%" },
+              ]}
+            />
+            <SettingsSelect
+              value={enhSharpen}
+              onChange={setEnh("playerEnhSharpen", setEnhSharpen)}
+              options={[
+                { value: false, label: "Sharpen: Off" },
+                { value: true, label: "Sharpen: On" },
+              ]}
+            />
+          </div>
         </div>
       </div>
 

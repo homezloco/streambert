@@ -50,6 +50,7 @@ const playerIpc = require("./src/ipc/player");
 const networkIpc = require("./src/ipc/network");
 const adultChannelsIpc = require("./src/ipc/adultChannels");
 const widevineIpc = require("./src/ipc/widevine");
+const videoEnhanceIpc = require("./src/ipc/videoEnhance");
 
 // WebRTC IP-leak protection is a command-line switch — must land before ready.
 networkIpc.applyWebRtcFlag();
@@ -897,6 +898,10 @@ function createWindow() {
     } catch {}
 
     hardenGuestWebContents(wc);
+    // Video enhancement (brightness/contrast/saturation/sharpen filters) on
+    // the partitions that play media — services keep their stock look.
+    if (wc.session && LOCKED_NAV_PARTS(wc.session.partition))
+      videoEnhanceIpc.watch(wc);
     // Only forward fullscreen events for guests hosted by the main window —
     // a guest inside the pop-out window must not toggle the page's overlay.
     const isMainGuest = wc.hostWebContents === mainWindow.webContents;
@@ -993,6 +998,7 @@ discordRpc.register(ipcMain);
 networkIpc.register();
 adultChannelsIpc.register();
 widevineIpc.register();
+videoEnhanceIpc.register();
 app.whenReady().then(() => networkIpc.applyNetwork());
 
 // get-block-stats lives with its data

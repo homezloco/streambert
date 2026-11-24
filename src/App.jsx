@@ -30,7 +30,7 @@ import {
   CINEMETA_KEY,
 } from "./utils/api";
 import { clearAppCaches } from "./utils/storage";
-import { playerDefaults } from "./utils/playerPrefs";
+import { playerDefaults, pushVideoEnhance } from "./utils/playerPrefs";
 import {
   readDiscordRpcSettings,
   applyDiscordRpcEnabled,
@@ -102,6 +102,12 @@ export default function App() {
   // Drag-and-drop local file playback (see handleFileDrop below)
   const [dropActive, setDropActive] = useState(false);
   const dragDepthRef = useRef(0);
+
+  // Push video-enhancement prefs (brightness/contrast/saturation/sharpen) to
+  // the main process so it can inject them into embedded players too.
+  useEffect(() => {
+    pushVideoEnhance();
+  }, []);
 
   // Navigation history stack for Ctrl+Z back navigation
   const [navStack, setNavStack] = useState([]);

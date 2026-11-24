@@ -707,6 +707,21 @@ video::cue{font-size:var(--cuesz,1.15em)}
     };
     tick();
   };
+  // ── Video enhancement (Settings → Player defaults): GPU-accelerated
+  // brightness/contrast/saturation + an SVG convolution sharpen.
+  const vFilt=[];
+  if(DEF.bright&&DEF.bright!==1)vFilt.push('brightness('+DEF.bright+')');
+  if(DEF.contrast&&DEF.contrast!==1)vFilt.push('contrast('+DEF.contrast+')');
+  if(DEF.saturate&&DEF.saturate!==1)vFilt.push('saturate('+DEF.saturate+')');
+  if(DEF.sharpen===true){
+    vFilt.push('url(#sb-vsharp)');
+    const svgd=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svgd.setAttribute('width','0');svgd.setAttribute('height','0');
+    svgd.style.position='absolute';
+    svgd.innerHTML='<filter id="sb-vsharp"><feConvolveMatrix order="3" preserveAlpha="true" kernelMatrix="0 -0.3 0 -0.3 2.2 -0.3 0 -0.3 0"/></filter>';
+    document.body.appendChild(svgd);
+  }
+  if(vFilt.length)video.style.filter=vFilt.join(' ');
   // Report position back so the app can offer resume on the next open
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
@@ -1797,6 +1812,11 @@ function sanitizePlayerPrefs(p) {
   }
   v = num(p.prebuffer, 1, 120);
   if (v !== undefined) out.prebuffer = Math.round(v);
+  for (const k of ["bright", "contrast", "saturate"]) {
+    v = num(p[k], 0.5, 2);
+    if (v !== undefined) out[k] = v;
+  }
+  if (p.sharpen === true) out.sharpen = true;
   return out;
 }
 

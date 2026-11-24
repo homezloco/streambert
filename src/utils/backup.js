@@ -72,6 +72,10 @@ export const BACKUP_KEYS = [
   "playerDefSubOff",
   "playerSpeeds",
   "playerDefPrebuffer",
+  "playerEnhBrightness",
+  "playerEnhContrast",
+  "playerEnhSaturation",
+  "playerEnhSharpen",
   "playerAutoFs",
   // Source reliability learning
   "sourceStats",
