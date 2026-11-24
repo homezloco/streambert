@@ -708,7 +708,8 @@ video::cue{font-size:var(--cuesz,1.15em)}
     tick();
   };
   // ── Video enhancement (Settings → Player defaults): GPU-accelerated
-  // brightness/contrast/saturation + an SVG convolution sharpen.
+  // brightness/contrast/saturation + an SVG convolution sharpen. The gear
+  // menu gets an "Enhance" toggle; remembered per-host via sb_enh cookie.
   const vFilt=[];
   if(DEF.bright&&DEF.bright!==1)vFilt.push('brightness('+DEF.bright+')');
   if(DEF.contrast&&DEF.contrast!==1)vFilt.push('contrast('+DEF.contrast+')');
@@ -721,7 +722,11 @@ video::cue{font-size:var(--cuesz,1.15em)}
     svgd.innerHTML='<filter id="sb-vsharp"><feConvolveMatrix order="3" preserveAlpha="true" kernelMatrix="0 -0.3 0 -0.3 2.2 -0.3 0 -0.3 0"/></filter>';
     document.body.appendChild(svgd);
   }
-  if(vFilt.length)video.style.filter=vFilt.join(' ');
+  const ENH_FILTER=vFilt.join(' ');
+  let enhOn=DEF.enhEnabled!==false;
+  const enhCk=ck('sb_enh');if(enhCk==='0')enhOn=false;else if(enhCk==='1')enhOn=true;
+  const applyEnh=()=>{video.style.filter=(enhOn&&ENH_FILTER)?ENH_FILTER:''};
+  applyEnh();
   // Report position back so the app can offer resume on the next open
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
@@ -954,6 +959,17 @@ video::cue{font-size:var(--cuesz,1.15em)}
   loopBtn.textContent='Loop';
   loopBtn.onclick=()=>{video.loop=!video.loop;loopBtn.classList.toggle('on',video.loop);menu.hidden=true;};
   playOpts.appendChild(loopBtn);
+  // Enhance toggle — flips the configured brightness/contrast/sharpen filter
+  // for this host without reopening Settings (cookie remembers the choice)
+  if(ENH_FILTER){
+    const enhBtn=document.createElement('button');
+    enhBtn.textContent='Enhance';
+    enhBtn.classList.toggle('on',enhOn);
+    enhBtn.onclick=()=>{enhOn=!enhOn;enhBtn.classList.toggle('on',enhOn);
+      document.cookie='sb_enh='+(enhOn?1:0)+';path=/;max-age=31536000';
+      applyEnh();menu.hidden=true;};
+    playOpts.appendChild(enhBtn);
+  }
   // Subtitle size — Small/Normal/Large cue scaling, persisted via cookie
   const szSec=document.createElement('div');szSec.className='sec';szSec.textContent='Caption size';
   const szBox=document.createElement('div');szBox.id='cuesizes';
@@ -1817,6 +1833,7 @@ function sanitizePlayerPrefs(p) {
     if (v !== undefined) out[k] = v;
   }
   if (p.sharpen === true) out.sharpen = true;
+  if (p.enabled === false) out.enhEnabled = false;
   return out;
 }
 

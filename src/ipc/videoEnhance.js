@@ -7,14 +7,24 @@
 
 const { ipcMain } = require("electron");
 
-let cfg = { bright: 1, contrast: 1, saturate: 1, sharpen: false };
+let cfg = {
+  enabled: true,
+  bright: 1,
+  contrast: 1,
+  saturate: 1,
+  sharpen: false,
+};
 const watched = new Set(); // live guest webContents
 
 const clamp01 = (v) =>
   typeof v === "number" && Number.isFinite(v) && v >= 0.5 && v <= 2 ? v : 1;
 
 const isDefault = () =>
-  cfg.bright === 1 && cfg.contrast === 1 && cfg.saturate === 1 && !cfg.sharpen;
+  cfg.enabled === false ||
+  (cfg.bright === 1 &&
+    cfg.contrast === 1 &&
+    cfg.saturate === 1 &&
+    !cfg.sharpen);
 
 const SHARP_DEFS =
   '<filter id="sb-vsharp">' +
@@ -55,7 +65,19 @@ function applyTo(wc) {
   if (wc.isDestroyed()) return;
   const js = injectJs();
   try {
-    for (const f of wc.frames || []) f.executeJavaScript(js).catch(() => {});
+    for (const f of wc.frames || []) {
+      // The app's own player page manages its filter itself — injecting the
+      // !important rule there would defeat its in-player Enhance toggle.
+      const u = f.url || "";
+      if (
+        u.startsWith("http://127.0.0.1") ||
+        u.startsWith("http://localhost") ||
+        u === "about:blank" ||
+        u === ""
+      )
+        continue;
+      f.executeJavaScript(js).catch(() => {});
+    }
   } catch {}
 }
 
@@ -72,6 +94,7 @@ function watch(wc) {
 function register() {
   ipcMain.on("video-enhance", (_e, c) => {
     cfg = {
+      enabled: c?.enabled !== false,
       bright: clamp01(c?.bright),
       contrast: clamp01(c?.contrast),
       saturate: clamp01(c?.saturate),

@@ -37,7 +37,11 @@ export function playerDefaults() {
 // applied both to the app's own player (via prefs below) and injected into
 // guest webviews over the "video-enhance" IPC channel.
 export function videoEnhancePrefs() {
+  // Master switch off = report all-defaults so nothing gets applied anywhere.
+  if (storage.get("playerEnhEnabled") === false)
+    return { enabled: false, bright: 1, contrast: 1, saturate: 1, sharpen: false };
   return {
+    enabled: true,
     bright: numInRange(storage.get("playerEnhBrightness"), 0.5, 2) ?? 1,
     contrast: numInRange(storage.get("playerEnhContrast"), 0.5, 2) ?? 1,
     saturate: numInRange(storage.get("playerEnhSaturation"), 0.5, 2) ?? 1,

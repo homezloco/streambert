@@ -2741,6 +2741,9 @@ function PlayerDefaultsSection() {
   const [enhSharpen, setEnhSharpen] = useState(
     () => storage.get("playerEnhSharpen") === true,
   );
+  const [enhEnabled, setEnhEnabled] = useState(
+    () => storage.get("playerEnhEnabled") !== false,
+  );
   // Enhancement selects write "" for Normal (key removed); everything pushes
   // straight to the main process so embeds update live too.
   const setEnh = (key, setter) => (v) => {
@@ -3040,6 +3043,20 @@ function PlayerDefaultsSection() {
               flexWrap: "wrap",
             }}
           >
+            <SettingsSelect
+              value={enhEnabled}
+              onChange={(v) => {
+                const on = String(v) === "true";
+                setEnhEnabled(on);
+                storage.set("playerEnhEnabled", on);
+                pushVideoEnhance();
+                flash();
+              }}
+              options={[
+                { value: "true", label: "Enhancement: On" },
+                { value: "false", label: "Enhancement: Off" },
+              ]}
+            />
             <SettingsSelect
               value={enhBright}
               onChange={setEnh("playerEnhBrightness", setEnhBright)}
