@@ -892,12 +892,16 @@ function createWindow() {
     } catch {}
 
     hardenGuestWebContents(wc);
-    wc.on("enter-html-full-screen", () =>
-      mainWindow.webContents.send("webview-enter-fullscreen"),
-    );
-    wc.on("leave-html-full-screen", () =>
-      mainWindow.webContents.send("webview-leave-fullscreen"),
-    );
+    // Only forward fullscreen events for guests hosted by the main window —
+    // a guest inside the pop-out window must not toggle the page's overlay.
+    wc.on("enter-html-full-screen", () => {
+      if (wc.hostWebContents === mainWindow.webContents)
+        mainWindow.webContents.send("webview-enter-fullscreen");
+    });
+    wc.on("leave-html-full-screen", () => {
+      if (wc.hostWebContents === mainWindow.webContents)
+        mainWindow.webContents.send("webview-leave-fullscreen");
+    });
   });
 
   mainWindow.loadFile(path.join(__dirname, "dist/index.html"));

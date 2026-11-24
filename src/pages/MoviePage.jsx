@@ -24,7 +24,6 @@ import {
   isAnimeContent,
   ANIME_DEFAULT_SOURCE,
   NON_ANIME_DEFAULT_SOURCE,
-  NEEDS_INTERCEPT,
   CLEAN_USER_AGENT,
   sourceUsesCleanUa,
   getNextNonAsyncSource,
@@ -1007,12 +1006,12 @@ export default function MoviePage({
     onHistory({ ...d, media_type: "movie" });
   }, [d, onHistory, playerSource, showToast]);
 
-  // Intercept fullscreen requests from embedded players (vidsrc / 2embed use
-  // the native Fullscreen API which would otherwise fullscreen the entire app).
-  // Videasy and HiAnime handle fullscreen internally via CSS, skip those.
+  // Track fullscreen requests from embedded players: entering marks the
+  // overlay embed-driven (hides the app toolbar); leaving exits our overlay
+  // too, so the player's own fullscreen button always toggles out of
+  // fullscreen — no matter which source produced it.
   useEffect(() => {
     if (!playing) return;
-    if (!NEEDS_INTERCEPT.includes(playerSource)) return;
     const enterH = window.electron?.onWebviewEnterFullscreen?.(() => {
       setEmbedFs(true);
       setPlayerFullscreen(true);
