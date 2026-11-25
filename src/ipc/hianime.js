@@ -622,6 +622,11 @@ video::cue{font-size:var(--cuesz,1.15em)}
    only one) — ours takes its exact slot so it can't cover the buttons */
 video:not(:fullscreen)::-webkit-media-controls-timeline{display:none}
 #seekbar{position:absolute;left:0;right:0;bottom:44px;height:14px;z-index:15;cursor:pointer}
+/* Idle auto-hide: custom chrome fades out after a few still seconds while
+   playing (native controls hide themselves); any input brings it back */
+#gear,#pip,#tv,#skip,#seekbar{transition:opacity .3s}
+body.idle{cursor:none}
+body.idle #gear,body.idle #pip,body.idle #tv,body.idle #skip,body.idle #seekbar{opacity:0;pointer-events:none}
 #seekbar .rail{position:absolute;top:6px;left:0;right:0;height:4px;background:rgba(255,255,255,.22);transition:height .1s,top .1s}
 #seekbar:hover .rail{top:4px;height:8px}
 #seekbuf{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.35)}
@@ -759,6 +764,17 @@ video:not(:fullscreen)::-webkit-media-controls-timeline{display:none}
   const skipIntro=()=>{video.currentTime=Math.min(video.duration||Infinity,video.currentTime+85);};
   skipBtn.onclick=skipIntro;
   video.addEventListener('timeupdate',()=>{skipBtn.style.display=(video.currentTime<900)?'block':'none';});
+  // ── Idle hide: chrome + cursor vanish after 3s still while playing ──
+  let idleT=null;
+  const wake=()=>{
+    document.body.classList.remove('idle');
+    clearTimeout(idleT);
+    idleT=setTimeout(()=>{if(!video.paused)document.body.classList.add('idle')},3000);
+  };
+  ['mousemove','mousedown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,wake,{passive:true}));
+  video.addEventListener('pause',()=>{clearTimeout(idleT);document.body.classList.remove('idle')});
+  video.addEventListener('play',wake);
+  wake();
   // Chromium's native controls already toggle play/pause on single click —
   // a second custom toggle double-fires (pause then auto-resume). We only
   // handle double-click for fullscreen; the two native toggles cancel out.
