@@ -1015,18 +1015,15 @@ export default function MoviePage({
     const enterH = window.electron?.onWebviewEnterFullscreen?.(() => {
       setEmbedFs(true);
       setPlayerFullscreen(true);
-      document.documentElement.setAttribute("data-player-fullscreen", "1");
     });
     const leaveH = window.electron?.onWebviewLeaveFullscreen?.(() => {
       setEmbedFs(false);
       setPlayerFullscreen(false);
-      document.documentElement.removeAttribute("data-player-fullscreen");
       if (document.fullscreenElement) document.exitFullscreen?.();
     });
     return () => {
       if (enterH) window.electron?.offWebviewEnterFullscreen?.(enterH);
       if (leaveH) window.electron?.offWebviewLeaveFullscreen?.(leaveH);
-      document.documentElement.removeAttribute("data-player-fullscreen");
     };
   }, [playing, playerSource]);
 
@@ -1036,11 +1033,9 @@ export default function MoviePage({
   useEffect(() => {
     if (!playing || !autoFsRef.current) return;
     setPlayerFullscreen(true);
-    document.documentElement.setAttribute("data-player-fullscreen", "1");
     return () => {
       setEmbedFs(false);
       setPlayerFullscreen(false);
-      document.documentElement.removeAttribute("data-player-fullscreen");
       if (document.fullscreenElement) document.exitFullscreen?.();
     };
   }, [playing]);
@@ -1050,7 +1045,6 @@ export default function MoviePage({
   const exitPlayerFs = useCallback(() => {
     setEmbedFs(false);
     setPlayerFullscreen(false);
-    document.documentElement.removeAttribute("data-player-fullscreen");
     // A guest fullscreen puts the whole WINDOW in OS fullscreen — exiting
     // our overlay without this leaves the window stuck (undraggable).
     if (document.fullscreenElement) document.exitFullscreen?.();
