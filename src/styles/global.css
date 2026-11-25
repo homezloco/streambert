@@ -1635,6 +1635,18 @@ select:focus-visible {
     background: rgba(0, 0, 0, 0.8);
 }
 
+/* Idle state in fullscreen: hide the overlay chrome + cursor after a few
+   still seconds — the page toggles .player-wrap--idle on a 3s timer. */
+.player-wrap--idle {
+    cursor: none;
+}
+.player-wrap--idle .player-overlay-group,
+.player-wrap--idle .player-overlay-btn,
+.player-wrap--idle .player-fs-exit {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
 /* Fix window-dragging on MacOS */
 .window-titlebar {
     -webkit-app-region: drag;

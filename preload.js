@@ -115,6 +115,15 @@ contextBridge.exposeInMainWorld("electron", {
     return h;
   },
   offGuestEscape: (h) => ipcRenderer.removeListener("guest-escape", h),
+  // Throttled mouse-activity ping forwarded from guests — lets fullscreen
+  // overlay chrome auto-hide on idle even while the pointer sits over the
+  // webview (which swallows embedder-side mouse events).
+  onGuestActivity: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on("guest-activity", h);
+    return h;
+  },
+  offGuestActivity: (h) => ipcRenderer.removeListener("guest-activity", h),
 
   // Block stats
   onBlockedUpdate: (cb) => {

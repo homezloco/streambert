@@ -581,6 +581,7 @@ function guardGuestNavigation(wc) {
 function hardenGuestWebContents(wc) {
   installPopupHandler(wc);
   guardGuestNavigation(wc);
+  let lastGuestAct = 0;
   // Guests swallow keyboard input once focused — forward Escape so the app
   // can still exit its own player-fullscreen overlay.
   wc.on("before-input-event", (_e, input) => {
@@ -589,6 +590,22 @@ function hardenGuestWebContents(wc) {
         const mw = getMainWindow();
         if (mw && !mw.isDestroyed())
           mw.webContents.send("guest-escape");
+      } catch {}
+      return;
+    }
+    // Mouse input never reaches the embedder while over a guest — forward a
+    // throttled activity ping so fullscreen chrome can auto-hide on idle.
+    if (
+      input.type === "mouseMove" ||
+      input.type === "mouseDown" ||
+      input.type === "mouseWheel"
+    ) {
+      const n = Date.now();
+      if (n - lastGuestAct < 400) return;
+      lastGuestAct = n;
+      try {
+        const mw = getMainWindow();
+        if (mw && !mw.isDestroyed()) mw.webContents.send("guest-activity");
       } catch {}
     }
   });

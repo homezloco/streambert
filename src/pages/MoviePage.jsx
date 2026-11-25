@@ -1068,6 +1068,45 @@ export default function MoviePage({
     };
   }, [playerFullscreen, exitPlayerFs]);
 
+  // Idle-hide the fullscreen overlay chrome (toolbar + ✕) after 3s of no
+  // input — like a normal video player. Mouse over the webview never
+  // reaches us, so guest activity is forwarded from the main process.
+  const [uiIdle, setUiIdle] = useState(false);
+  const uiIdleTimerRef = useRef(null);
+  useEffect(() => {
+    const uiBusy =
+      showSourceMenu || showBlockedModal || showDownload || showTv;
+    if (!playerFullscreen || uiBusy) {
+      setUiIdle(false);
+      return;
+    }
+    const wake = () => {
+      setUiIdle(false);
+      clearTimeout(uiIdleTimerRef.current);
+      uiIdleTimerRef.current = setTimeout(() => setUiIdle(true), 3000);
+    };
+    wake();
+    window.addEventListener("mousemove", wake);
+    window.addEventListener("mousedown", wake);
+    window.addEventListener("keydown", wake);
+    window.addEventListener("touchstart", wake);
+    const actH = window.electron?.onGuestActivity?.(() => wake());
+    return () => {
+      clearTimeout(uiIdleTimerRef.current);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("mousedown", wake);
+      window.removeEventListener("keydown", wake);
+      window.removeEventListener("touchstart", wake);
+      if (actH) window.electron?.offGuestActivity?.(actH);
+    };
+  }, [
+    playerFullscreen,
+    showSourceMenu,
+    showBlockedModal,
+    showDownload,
+    showTv,
+  ]);
+
   // ── PiP pop-out: navigate main webview away so only one stream is active ──
   useEffect(() => {
     if (!playing) return;
@@ -1330,7 +1369,7 @@ export default function MoviePage({
       {playing && !restricted && !isUnreleased && (
         <div className="section">
           <div
-            className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}${embedFs ? " embed-fs" : ""}`}
+            className={`player-wrap${playerFullscreen ? " player-wrap--fullscreen" : ""}${embedFs ? " embed-fs" : ""}${uiIdle ? " player-wrap--idle" : ""}`}
             ref={playerWrapRef}
           >
             {playerFullscreen && (
