@@ -591,10 +591,13 @@ function hardenGuestWebContents(wc) {
         if (mw && !mw.isDestroyed())
           mw.webContents.send("guest-escape");
       } catch {}
-      return;
     }
-    // Mouse input never reaches the embedder while over a guest — forward a
-    // throttled activity ping so fullscreen chrome can auto-hide on idle.
+  });
+  // Mouse input never reaches the embedder while over a guest — forward a
+  // throttled activity ping so fullscreen chrome can auto-hide on idle.
+  // (input-event sees every InputEvent; before-input-event is keyboard-only
+  // on some Electron builds.)
+  wc.on("input-event", (_e, input) => {
     if (
       input.type === "mouseMove" ||
       input.type === "mouseDown" ||
