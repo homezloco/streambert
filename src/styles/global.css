@@ -1661,10 +1661,11 @@ select:focus-visible {
     cursor: default;
 }
 
-/* Hide the custom window titlebar while the player overlay is fullscreen —
-   keyed off the overlay class itself (not a leaked-prone attribute), so if
-   the overlay isn't visible the titlebar can never stay hidden. */
-body:has(.player-wrap--fullscreen) .window-titlebar {
+/* Hide the custom window titlebar in player fullscreen only while idle —
+   keyed off the overlay's own classes (not a leaked-prone attribute), so
+   moving the mouse brings the titlebar back and it can never stay hidden
+   when the overlay isn't there. */
+body:has(.player-wrap--fullscreen.player-wrap--idle) .window-titlebar {
     display: none !important;
 }
 
