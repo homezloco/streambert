@@ -579,39 +579,18 @@ function guardGuestNavigation(wc) {
 // denial, nav lock, beforeunload ad-trap suppression, and the popunder/
 // overlay killer on adult hosts (plus every host inside player partitions,
 // where the script's click-killer doubles as an anti-clickjack measure).
-// Polls the OS cursor position 4×/s and pings "guest-activity" whenever the
-// pointer moves while inside the app window — the only reliable signal that
-// survives guest input swallowing (used for fullscreen chrome auto-hide).
-let _cursorWatchStarted = false;
-let _lastCursorPt = null;
-function startCursorActivityWatch() {
-  if (_cursorWatchStarted) return;
-  _cursorWatchStarted = true;
-  let lastPing = 0;
-  setInterval(() => {
-    try {
-      const mw = getMainWindow();
-      if (!mw || mw.isDestroyed() || !mw.isVisible()) return;
-      const p = screen.getCursorScreenPoint();
-      const moved =
-        _lastCursorPt && (p.x !== _lastCursorPt.x || p.y !== _lastCursorPt.y);
-      _lastCursorPt = p;
-      if (!moved) return;
-      const n = Date.now();
-      if (n - lastPing < 400) return;
-      const b = mw.getBounds();
-      if (
-        p.x >= b.x &&
-        p.x < b.x + b.width &&
-        p.y >= b.y &&
-        p.y < b.y + b.height
-      ) {
-        lastPing = n;
-        mw.webContents.send("guest-activity");
-      }
-    } catch {}
-  }, 250);
-}
+// Injected into every guest frame: throttled pointer-activity ping emitted
+// on the console. Guests swallow input before it reaches the embedder, and
+// input-event/cursor-position APIs are unreliable under Wayland — console is
+// the channel that always gets out (main reads it via console-message).
+const GUEST_ACT_JS = `(function(){
+  if(window.__sbActW)return;window.__sbActW=1;
+  var _t=0;
+  var ping=function(){var n=Date.now();if(n-_t>400){_t=n;try{console.log('__SB_ACT__')}catch(e){}}};
+  document.addEventListener('mousemove',ping,true);
+  document.addEventListener('mousedown',ping,true);
+  document.addEventListener('wheel',ping,true);
+})()`;
 
 function hardenGuestWebContents(wc) {
   installPopupHandler(wc);
@@ -627,11 +606,32 @@ function hardenGuestWebContents(wc) {
       } catch {}
     }
   });
-  // Mouse input never reaches the embedder while over a guest, and guest
-  // input-event delivery is unreliable — instead watch the OS cursor
-  // position: movement inside the app window = activity. Deterministic
-  // regardless of what the guest swallows.
-  startCursorActivityWatch();
+  // Pointer-activity tracking inside the guest: inject a throttled console
+  // ping into every frame; forward it to the page as "guest-activity" so
+  // fullscreen chrome can auto-hide on real idle.
+  const injectAct = () => {
+    try {
+      for (const f of wc.frames || []) {
+        const u = f.url || "";
+        if (!u || u === "about:blank") continue;
+        f.executeJavaScript(GUEST_ACT_JS).catch(() => {});
+      }
+    } catch {}
+  };
+  wc.on("dom-ready", injectAct);
+  wc.on("did-frame-navigate", injectAct);
+  wc.on("did-navigate-in-page", injectAct);
+  let lastActPing = 0;
+  wc.on("console-message", (_e, _level, msg) => {
+    if (msg !== "__SB_ACT__") return;
+    const n = Date.now();
+    if (n - lastActPing < 300) return;
+    lastActPing = n;
+    try {
+      const mw = getMainWindow();
+      if (mw && !mw.isDestroyed()) mw.webContents.send("guest-activity");
+    } catch {}
+  });
   // "Leave site?" dialogs are an ad-network trick on guest pages — the app
   // owns navigation, so let unloads proceed silently.
   wc.on("will-prevent-unload", (e) => e.preventDefault());
