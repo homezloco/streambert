@@ -8,6 +8,7 @@ const {
   ipcMain,
   session,
   webContents,
+  screen,
   Notification,
   globalShortcut,
 } = require("electron");
@@ -578,10 +579,43 @@ function guardGuestNavigation(wc) {
 // denial, nav lock, beforeunload ad-trap suppression, and the popunder/
 // overlay killer on adult hosts (plus every host inside player partitions,
 // where the script's click-killer doubles as an anti-clickjack measure).
+// Polls the OS cursor position 4×/s and pings "guest-activity" whenever the
+// pointer moves while inside the app window — the only reliable signal that
+// survives guest input swallowing (used for fullscreen chrome auto-hide).
+let _cursorWatchStarted = false;
+let _lastCursorPt = null;
+function startCursorActivityWatch() {
+  if (_cursorWatchStarted) return;
+  _cursorWatchStarted = true;
+  let lastPing = 0;
+  setInterval(() => {
+    try {
+      const mw = getMainWindow();
+      if (!mw || mw.isDestroyed() || !mw.isVisible()) return;
+      const p = screen.getCursorScreenPoint();
+      const moved =
+        _lastCursorPt && (p.x !== _lastCursorPt.x || p.y !== _lastCursorPt.y);
+      _lastCursorPt = p;
+      if (!moved) return;
+      const n = Date.now();
+      if (n - lastPing < 400) return;
+      const b = mw.getBounds();
+      if (
+        p.x >= b.x &&
+        p.x < b.x + b.width &&
+        p.y >= b.y &&
+        p.y < b.y + b.height
+      ) {
+        lastPing = n;
+        mw.webContents.send("guest-activity");
+      }
+    } catch {}
+  }, 250);
+}
+
 function hardenGuestWebContents(wc) {
   installPopupHandler(wc);
   guardGuestNavigation(wc);
-  let lastGuestAct = 0;
   // Guests swallow keyboard input once focused — forward Escape so the app
   // can still exit its own player-fullscreen overlay.
   wc.on("before-input-event", (_e, input) => {
@@ -593,25 +627,11 @@ function hardenGuestWebContents(wc) {
       } catch {}
     }
   });
-  // Mouse input never reaches the embedder while over a guest — forward a
-  // throttled activity ping so fullscreen chrome can auto-hide on idle.
-  // (input-event sees every InputEvent; before-input-event is keyboard-only
-  // on some Electron builds.)
-  wc.on("input-event", (_e, input) => {
-    if (
-      input.type === "mouseMove" ||
-      input.type === "mouseDown" ||
-      input.type === "mouseWheel"
-    ) {
-      const n = Date.now();
-      if (n - lastGuestAct < 400) return;
-      lastGuestAct = n;
-      try {
-        const mw = getMainWindow();
-        if (mw && !mw.isDestroyed()) mw.webContents.send("guest-activity");
-      } catch {}
-    }
-  });
+  // Mouse input never reaches the embedder while over a guest, and guest
+  // input-event delivery is unreliable — instead watch the OS cursor
+  // position: movement inside the app window = activity. Deterministic
+  // regardless of what the guest swallows.
+  startCursorActivityWatch();
   // "Leave site?" dialogs are an ad-network trick on guest pages — the app
   // owns navigation, so let unloads proceed silently.
   wc.on("will-prevent-unload", (e) => e.preventDefault());
