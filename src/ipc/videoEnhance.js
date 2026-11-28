@@ -105,4 +105,11 @@ function register() {
   });
 }
 
-module.exports = { register, watch };
+// Live config snapshot — served over /enhance on the player server so the
+// app's own player page can pick up settings changes mid-playback (it can't
+// receive IPC without a preload).
+function get() {
+  return { ...cfg };
+}
+
+module.exports = { register, watch, get };

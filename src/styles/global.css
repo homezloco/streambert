@@ -4103,6 +4103,91 @@ kbd {
     z-index: 9999;
 }
 
+/* In-player picture controls (EnhancePanel) */
+.enh-panel {
+    position: fixed;
+    z-index: 9999;
+    min-width: 240px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--bg) 60%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: ctxFadeIn 0.12s ease both;
+}
+
+.enh-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.enh-panel__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.enh-panel__label {
+    font-size: 12px;
+    color: var(--text2);
+    width: 68px;
+    flex-shrink: 0;
+}
+
+.enh-panel__row input[type="range"] {
+    flex: 1;
+    height: 4px;
+    accent-color: var(--red);
+    cursor: pointer;
+}
+
+.enh-panel__val {
+    font-size: 11px;
+    color: var(--text3);
+    width: 38px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.enh-panel__toggle {
+    background: var(--surface3, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border);
+    color: var(--text2);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.enh-panel__toggle--on {
+    background: var(--red-dim);
+    border-color: var(--red);
+    color: var(--red);
+}
+
+.enh-panel__reset {
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 0;
+    text-align: left;
+}
+
+.enh-panel__reset:hover {
+    color: var(--text);
+}
+
 .player-no-progress-hint {
     position: absolute;
     bottom: 10px;

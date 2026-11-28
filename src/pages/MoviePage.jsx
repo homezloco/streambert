@@ -48,6 +48,7 @@ import {
 import DownloadModal from "../components/DownloadModal";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
+import EnhancePanel from "../components/EnhancePanel";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import MediaCard from "../components/MediaCard";
 import ScrollRow from "../components/ScrollRow";
@@ -139,6 +140,9 @@ export default function MoviePage({
     [playerSource],
   );
   const [showSourceMenu, setShowSourceMenu] = useState(false);
+  const [showEnh, setShowEnh] = useState(false);
+  const [enhPos, setEnhPos] = useState(null);
+  const enhRef = useRef(null);
   const [dubMode, setDubMode] = useState(
     () => storage.get(STORAGE_KEYS.HIANIME_DUB_MODE) || "sub",
   );
@@ -697,6 +701,18 @@ export default function MoviePage({
       });
   }, [nativeMode, m3u8Url, playerSource, interceptedSubs, progressKey]);
 
+  // Close enhance panel on click-outside
+  useEffect(() => {
+    if (!showEnh) return;
+    const handleClick = (e) => {
+      if (enhRef.current?.contains(e.target) || e.target.closest(".enh-panel"))
+        return;
+      setShowEnh(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showEnh]);
+
   // Close source dropdown on scroll or click-outside
   useEffect(() => {
     if (!showSourceMenu) return;
@@ -1069,7 +1085,7 @@ export default function MoviePage({
   const uiIdleTimerRef = useRef(null);
   useEffect(() => {
     const uiBusy =
-      showSourceMenu || showBlockedModal || showDownload || showTv;
+      showSourceMenu || showEnh || showBlockedModal || showDownload || showTv;
     if (!playerFullscreen || uiBusy) {
       setUiIdle(false);
       return;
@@ -1096,6 +1112,7 @@ export default function MoviePage({
   }, [
     playerFullscreen,
     showSourceMenu,
+    showEnh,
     showBlockedModal,
     showDownload,
     showTv,
@@ -1552,6 +1569,21 @@ export default function MoviePage({
                 {PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
                   "Source"}
               </button>
+              {/* In-player picture controls (brightness/contrast/colour/sharpen) */}
+              <button
+                ref={enhRef}
+                className="player-overlay-btn"
+                onClick={() => {
+                  const rect = enhRef.current?.getBoundingClientRect();
+                  if (rect)
+                    setEnhPos({ top: rect.bottom + 6, left: rect.left });
+                  setShowEnh((v) => !v);
+                }}
+                title="Picture settings"
+                style={showEnh ? { color: "var(--red)" } : undefined}
+              >
+                ⚙
+              </button>
               {/* Native player toggle: replay the captured stream in the
                   app's own hls.js player instead of the embed */}
               {!sourceIsAsync(playerSource) && (
@@ -1653,6 +1685,11 @@ export default function MoviePage({
                 <PopOutIcon />
               </button>
             </div>
+            {showEnh && enhPos && (
+              <EnhancePanel
+                style={{ top: enhPos.top, left: enhPos.left }}
+              />
+            )}
             {showSourceMenu && menuPos && (
               <div
                 className="source-dropdown source-dropdown--fixed"

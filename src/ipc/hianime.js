@@ -12,6 +12,7 @@
 // curl-impersonate). If it is unavailable we fall back to Node's https module.
 
 const { app, ipcMain, net } = require("electron");
+const videoEnhance = require("./videoEnhance");
 const https = require("https");
 const http = require("http");
 const fs = require("fs");
@@ -718,23 +719,38 @@ body.idle #gear,body.idle #pip,body.idle #tv,body.idle #skip,body.idle #seekbar{
   // ── Video enhancement (Settings → Player defaults): GPU-accelerated
   // brightness/contrast/saturation + an SVG convolution sharpen. The gear
   // menu gets an "Enhance" toggle; remembered per-host via sb_enh cookie.
-  const vFilt=[];
-  if(DEF.bright&&DEF.bright!==1)vFilt.push('brightness('+DEF.bright+')');
-  if(DEF.contrast&&DEF.contrast!==1)vFilt.push('contrast('+DEF.contrast+')');
-  if(DEF.saturate&&DEF.saturate!==1)vFilt.push('saturate('+DEF.saturate+')');
-  if(DEF.sharpen===true){
-    vFilt.push('url(#sb-vsharp)');
+  // Config is mutable: /enhance is polled so in-app changes (the player's
+  // Picture panel, Settings) apply to an already-playing video.
+  const ENH={bright:+DEF.bright||1,contrast:+DEF.contrast||1,saturate:+DEF.saturate||1,sharpen:DEF.sharpen===true,enabled:DEF.enhEnabled!==false};
+  const ensureSharp=()=>{
+    if(document.getElementById('sb-vsharpdefs'))return;
     const svgd=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svgd.id='sb-vsharpdefs';
     svgd.setAttribute('width','0');svgd.setAttribute('height','0');
     svgd.style.position='absolute';
     svgd.innerHTML='<filter id="sb-vsharp"><feConvolveMatrix order="3" preserveAlpha="true" kernelMatrix="0 -0.3 0 -0.3 2.2 -0.3 0 -0.3 0"/></filter>';
     document.body.appendChild(svgd);
-  }
-  const ENH_FILTER=vFilt.join(' ');
+  };
+  const enhFilterOf=()=>{const f=[];
+    if(ENH.bright!==1)f.push('brightness('+ENH.bright+')');
+    if(ENH.contrast!==1)f.push('contrast('+ENH.contrast+')');
+    if(ENH.saturate!==1)f.push('saturate('+ENH.saturate+')');
+    if(ENH.sharpen)f.push('url(#sb-vsharp)');
+    return f.join(' ')};
+  let ENH_FILTER='';
   let enhOn=DEF.enhEnabled!==false;
   const enhCk=ck('sb_enh');if(enhCk==='0')enhOn=false;else if(enhCk==='1')enhOn=true;
-  const applyEnh=()=>{video.style.filter=(enhOn&&ENH_FILTER)?ENH_FILTER:''};
-  applyEnh();
+  const applyEnh=()=>{video.style.filter=(enhOn&&ENH.enabled&&ENH_FILTER)?ENH_FILTER:''};
+  const recompute=()=>{ENH_FILTER=enhFilterOf();if(ENH.sharpen)ensureSharp();applyEnh()};
+  recompute();
+  setInterval(()=>{
+    fetch('enhance'+location.search).then(r=>r.json()).then(c=>{
+      if(!c)return;
+      ENH.bright=c.bright||1;ENH.contrast=c.contrast||1;ENH.saturate=c.saturate||1;
+      ENH.sharpen=c.sharpen===true;ENH.enabled=c.enabled!==false;
+      recompute();
+    }).catch(()=>{});
+  },2000);
   // Report position back so the app can offer resume on the next open
   const report=()=>{if(video.duration>0)fetch('/progress?t='+new URLSearchParams(location.search).get('t'),{method:'POST',body:JSON.stringify({t:video.currentTime,d:video.duration})}).catch(()=>{})};
   setInterval(()=>{if(!video.paused)report()},5000);
@@ -1527,6 +1543,17 @@ function getPlayerServer() {
 
       // Playback position reports from the player page → forwarded to the
       // registered listener (main process → renderer) for resume bookkeeping
+      // Live video-enhancement config — the player page polls this so
+      // in-app changes (in-player panel / Settings) apply mid-playback.
+      if (url.pathname === "/enhance" && req.method === "GET") {
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        });
+        res.end(JSON.stringify(videoEnhance.get()));
+        return;
+      }
+
       if (url.pathname === "/progress" && req.method === "POST") {
         let body = "";
         req.on("data", (c) => {
